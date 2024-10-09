@@ -22,6 +22,9 @@ services:
       - VESPA_HOST=index
       - REDIS_HOST=cache
       - MODEL_SERVER_HOST=${MODEL_SERVER_HOST:-inference_model_server}
+      # Enterprise Edition only
+      - ENABLE_PAID_ENTERPRISE_EDITION_FEATURES=${ENABLE_PAID_ENTERPRISE_EDITION_FEATURES:-true}
+      - NEXT_PUBLIC_CUSTOM_REFRESH_URL=${NEXT_PUBLIC_CUSTOM_REFRESH_URL:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     logging:
@@ -53,6 +56,8 @@ services:
       - REDIS_HOST=cache
       - MODEL_SERVER_HOST=${MODEL_SERVER_HOST:-inference_model_server}
       - INDEXING_MODEL_SERVER_HOST=${INDEXING_MODEL_SERVER_HOST:-indexing_model_server}
+      # Enterprise Edition stuff
+      - ENABLE_PAID_ENTERPRISE_EDITION_FEATURES=${ENABLE_PAID_ENTERPRISE_EDITION_FEATURES:-true}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     logging:
@@ -80,6 +85,9 @@ services:
       - .env
     environment:
       - INTERNAL_URL=http://api_server:8080
+      # Enterprise Edition only
+      - ENABLE_PAID_ENTERPRISE_EDITION_FEATURES=${ENABLE_PAID_ENTERPRISE_EDITION_FEATURES:-true}
+      - NEXT_PUBLIC_CUSTOM_REFRESH_URL=${NEXT_PUBLIC_CUSTOM_REFRESH_URL:-}
     logging:
       driver: json-file
       options:
