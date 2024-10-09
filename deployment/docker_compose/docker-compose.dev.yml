@@ -103,6 +103,8 @@ services:
       options:
         max-size: "50m"
         max-file: "6"
+    env_file:
+      - .env
 
   background:
     image: danswer/danswer-backend:${IMAGE_TAG:-latest}
@@ -117,6 +119,8 @@ services:
       - inference_model_server
       - indexing_model_server
     restart: always
+    env_file:
+      - .env
     environment:
       - ENCRYPTION_KEY_SECRET=${ENCRYPTION_KEY_SECRET:-}
       # Gen AI Settings (Needed by DanswerBot)
@@ -226,6 +230,8 @@ services:
     depends_on:
       - api_server
     restart: always
+    env_file:
+      - .env
     environment:
       - INTERNAL_URL=http://api_server:8080
       - WEB_DOMAIN=${WEB_DOMAIN:-}
@@ -249,6 +255,8 @@ services:
         exec uvicorn model_server.main:app --host 0.0.0.0 --port 9000;
       fi"
     restart: on-failure
+    env_file:
+      - .env
     environment:
       - MIN_THREADS_ML_MODELS=${MIN_THREADS_ML_MODELS:-}
       # Set to debug to get more fine-grained logs
@@ -275,6 +283,8 @@ services:
         exec uvicorn model_server.main:app --host 0.0.0.0 --port 9000;
       fi"
     restart: on-failure
+    env_file:
+      - .env
     environment:
       - INDEX_BATCH_SIZE=${INDEX_BATCH_SIZE:-}
       - MIN_THREADS_ML_MODELS=${MIN_THREADS_ML_MODELS:-}
@@ -294,6 +304,8 @@ services:
     image: postgres:15.2-alpine
     command: -c 'max_connections=250'
     restart: always
+    env_file:
+      - .env
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
@@ -306,6 +318,8 @@ services:
   index:
     image: vespaengine/vespa:8.277.17
     restart: always
+    env_file:
+      - .env
     ports:
       - "19071:19071"
       - "8081:8081"
@@ -346,7 +360,9 @@ services:
     # in order to make this work on both Unix-like systems and windows
     command: > 
       /bin/sh -c "dos2unix /etc/nginx/conf.d/run-nginx.sh 
-      && /etc/nginx/conf.d/run-nginx.sh app.conf.template.dev"  
+      && /etc/nginx/conf.d/run-nginx.sh app.conf.template.dev" 
+    env_file:
+      - .env.nginx
 
     # follows https://pentacent.medium.com/nginx-and-lets-encrypt-with-docker-in-less-than-5-minutes-b4b8a60d3a71
   certbot:
