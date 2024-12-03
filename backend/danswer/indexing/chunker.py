@@ -10,12 +10,13 @@ from danswer.connectors.cross_connector_utils.miscellaneous_utils import (
     get_metadata_keys_to_ignore,
 )
 from danswer.connectors.models import Document
-from danswer.indexing.indexing_heartbeat import Heartbeat
+from danswer.indexing.indexing_heartbeat import IndexingHeartbeatInterface
 from danswer.indexing.models import DocAwareChunk
 from danswer.natural_language_processing.utils import BaseTokenizer
 from danswer.utils.logger import setup_logger
+from danswer.utils.text_processing import clean_text
 from danswer.utils.text_processing import shared_precompare_cleanup
-
+from shared_configs.configs import STRICT_CHUNK_TOKEN_LIMIT
 
 # Not supporting overlaps, we need a clean combination of chunks and it is unclear if overlaps
 # actually help quality at all
@@ -26,6 +27,7 @@ CHUNK_OVERLAP = 0
 # could be another 128 tokens leaving 256 for the actual contents
 MAX_METADATA_PERCENTAGE = 0.25
 CHUNK_MIN_CONTENT = 256
+
 
 logger = setup_logger()
 
@@ -124,7 +126,7 @@ class Chunker:
         chunk_token_limit: int = DOC_EMBEDDING_CONTEXT_SIZE,
         chunk_overlap: int = CHUNK_OVERLAP,
         mini_chunk_size: int = MINI_CHUNK_SIZE,
-        heartbeat: Heartbeat | None = None,
+        callback: IndexingHeartbeatInterface | None = None,
     ) -> None:
         from llama_index.text_splitter import SentenceSplitter
 
@@ -133,7 +135,7 @@ class Chunker:
         self.enable_multipass = enable_multipass
         self.enable_large_chunks = enable_large_chunks
         self.tokenizer = tokenizer
-        self.heartbeat = heartbeat
+        self.callback = callback
 
         self.blurb_splitter = SentenceSplitter(
             tokenizer=tokenizer.tokenize,
@@ -156,6 +158,24 @@ class Chunker:
             if enable_multipass
             else None
         )
+
+    def _split_oversized_chunk(self, text: str, content_token_limit: int) -> list[str]:
+        """
+        Splits the text into smaller chunks based on token count to ensure
+        no chunk exceeds the content_token_limit.
+        """
+        tokens = self.tokenizer.tokenize(text)
+        chunks = []
+        start = 0
+        total_tokens = len(tokens)
+        while start < total_tokens:
+            end = min(start + content_token_limit, total_tokens)
+            token_chunk = tokens[start:end]
+            # Join the tokens to reconstruct the text
+            chunk_text = " ".join(token_chunk)
+            chunks.append(chunk_text)
+            start = end
+        return chunks
 
     def _extract_blurb(self, text: str) -> str:
         texts = self.blurb_splitter.split_text(text)
@@ -201,9 +221,20 @@ class Chunker:
                 mini_chunk_texts=self._get_mini_chunk_texts(text),
             )
 
-        for section in document.sections:
-            section_text = section.text
+        for section_idx, section in enumerate(document.sections):
+            section_text = clean_text(section.text)
             section_link_text = section.link or ""
+            # If there is no useful content, not even the title, just drop it
+            if not section_text and (not document.title or section_idx > 0):
+                # If a section is empty and the document has no title, we can just drop it. We return a list of
+                # DocAwareChunks where each one contains the necessary information needed down the line for indexing.
+                # There is no concern about dropping whole documents from this list, it should not cause any indexing failures.
+                logger.warning(
+                    f"Skipping section {section.text} from document "
+                    f"{document.semantic_identifier} due to empty text after cleaning "
+                    f" with link {section_link_text}"
+                )
+                continue
 
             section_token_count = len(self.tokenizer.tokenize(section_text))
 
@@ -217,14 +248,37 @@ class Chunker:
                     chunk_text = ""
 
                 split_texts = self.chunk_splitter.split_text(section_text)
+
                 for i, split_text in enumerate(split_texts):
-                    chunks.append(
-                        _create_chunk(
-                            text=split_text,
-                            links={0: section_link_text},
-                            is_continuation=(i != 0),
+                    if (
+                        STRICT_CHUNK_TOKEN_LIMIT
+                        and
+                        # Tokenizer only runs if STRICT_CHUNK_TOKEN_LIMIT is true
+                        len(self.tokenizer.tokenize(split_text)) > content_token_limit
+                    ):
+                        # If STRICT_CHUNK_TOKEN_LIMIT is true, manually check
+                        # the token count of each split text to ensure it is
+                        # not larger than the content_token_limit
+                        smaller_chunks = self._split_oversized_chunk(
+                            split_text, content_token_limit
                         )
-                    )
+                        for i, small_chunk in enumerate(smaller_chunks):
+                            chunks.append(
+                                _create_chunk(
+                                    text=small_chunk,
+                                    links={0: section_link_text},
+                                    is_continuation=(i != 0),
+                                )
+                            )
+                    else:
+                        chunks.append(
+                            _create_chunk(
+                                text=split_text,
+                                links={0: section_link_text},
+                                is_continuation=(i != 0),
+                            )
+                        )
+
                 continue
 
             current_token_count = len(self.tokenizer.tokenize(chunk_text))
@@ -307,11 +361,20 @@ class Chunker:
         return normal_chunks
 
     def chunk(self, documents: list[Document]) -> list[DocAwareChunk]:
+        """
+        Takes in a list of documents and chunks them into smaller chunks for indexing
+        while persisting the document metadata.
+        """
         final_chunks: list[DocAwareChunk] = []
         for document in documents:
-            final_chunks.extend(self._handle_single_document(document))
+            if self.callback:
+                if self.callback.should_stop():
+                    raise RuntimeError("Chunker.chunk: Stop signal detected")
 
-            if self.heartbeat:
-                self.heartbeat.heartbeat()
+            chunks = self._handle_single_document(document)
+            final_chunks.extend(chunks)
+
+            if self.callback:
+                self.callback.progress("Chunker.chunk", len(chunks))
 
         return final_chunks

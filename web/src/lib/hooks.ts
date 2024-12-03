@@ -1,3 +1,4 @@
+"use client";
 import {
   ConnectorIndexingStatus,
   DocumentBoostStatus,
@@ -6,14 +7,15 @@ import {
 } from "@/lib/types";
 import useSWR, { mutate, useSWRConfig } from "swr";
 import { errorHandlingFetcher } from "./fetcher";
-import { useEffect, useState } from "react";
-import { DateRangePickerValue } from "@tremor/react";
+import { useContext, useEffect, useState } from "react";
+import { DateRangePickerValue } from "@/app/ee/admin/performance/DateRangeSelector";
 import { SourceMetadata } from "./search/interfaces";
 import { destructureValue } from "./llm/utils";
 import { ChatSession } from "@/app/chat/interfaces";
 import { UsersResponse } from "./users/interfaces";
-import { usePaidEnterpriseFeaturesEnabled } from "@/components/settings/usePaidEnterpriseFeaturesEnabled";
 import { Credential } from "./connectors/credentials";
+import { SettingsContext } from "@/components/settings/SettingsProvider";
+import { PersonaCategory } from "@/app/admin/assistants/interfaces";
 
 const CREDENTIAL_URL = "/api/manage/admin/credential";
 
@@ -79,6 +81,19 @@ export const useConnectorCredentialIndexingStatus = (
   return {
     ...swrResponse,
     refreshIndexingStatus: () => mutate(url),
+  };
+};
+
+export const useCategories = () => {
+  const { mutate } = useSWRConfig();
+  const swrResponse = useSWR<PersonaCategory[]>(
+    "/api/persona/categories",
+    errorHandlingFetcher
+  );
+
+  return {
+    ...swrResponse,
+    refreshCategories: () => mutate("/api/persona/categories"),
   };
 };
 
@@ -159,7 +174,6 @@ export function useLlmOverride(
           modelName: "",
         }
   );
-
   const [llmOverride, setLlmOverride] = useState<LlmOverride>(
     currentChatSession && currentChatSession.current_alternate_model
       ? destructureValue(currentChatSession.current_alternate_model)
@@ -220,8 +234,14 @@ export const useUserGroups = (): {
   error: string;
   refreshUserGroups: () => void;
 } => {
-  const swrResponse = useSWR<UserGroup[]>(USER_GROUP_URL, errorHandlingFetcher);
-  const isPaidEnterpriseFeaturesEnabled = usePaidEnterpriseFeaturesEnabled();
+  const combinedSettings = useContext(SettingsContext);
+  const isPaidEnterpriseFeaturesEnabled =
+    combinedSettings && combinedSettings.enterpriseSettings !== null;
+
+  const swrResponse = useSWR<UserGroup[]>(
+    isPaidEnterpriseFeaturesEnabled ? USER_GROUP_URL : null,
+    errorHandlingFetcher
+  );
 
   if (!isPaidEnterpriseFeaturesEnabled) {
     return {
@@ -271,11 +291,26 @@ const MODEL_DISPLAY_NAMES: { [key: string]: string } = {
   "claude-2.0": "Claude 2.0",
   "claude-instant-1.2": "Claude Instant 1.2",
   "claude-3-5-sonnet-20240620": "Claude 3.5 Sonnet",
+  "claude-3-5-sonnet-20241022": "Claude 3.5 Sonnet (New)",
+  "claude-3-5-sonnet-v2@20241022": "Claude 3.5 Sonnet (New)",
+  "claude-3.5-sonnet-v2@20241022": "Claude 3.5 Sonnet (New)",
+
+  // Google Models
+  "gemini-1.5-pro": "Gemini 1.5 Pro",
+  "gemini-1.5-flash": "Gemini 1.5 Flash",
+  "gemini-1.5-pro-001": "Gemini 1.5 Pro",
+  "gemini-1.5-flash-001": "Gemini 1.5 Flash",
+  "gemini-1.5-pro-002": "Gemini 1.5 Pro (v2)",
+  "gemini-1.5-flash-002": "Gemini 1.5 Flash (v2)",
 
   // Bedrock models
   "meta.llama3-1-70b-instruct-v1:0": "Llama 3.1 70B",
   "meta.llama3-1-8b-instruct-v1:0": "Llama 3.1 8B",
   "meta.llama3-70b-instruct-v1:0": "Llama 3 70B",
+  "meta.llama3-2-1b-instruct-v1:0": "Llama 3.2 1B",
+  "meta.llama3-2-3b-instruct-v1:0": "Llama 3.2 3B",
+  "meta.llama3-2-11b-instruct-v1:0": "Llama 3.2 11B",
+  "meta.llama3-2-90b-instruct-v1:0": "Llama 3.2 90B",
   "meta.llama3-8b-instruct-v1:0": "Llama 3 8B",
   "meta.llama2-70b-chat-v1": "Llama 2 70B",
   "meta.llama2-13b-chat-v1": "Llama 2 13B",
@@ -290,6 +325,7 @@ const MODEL_DISPLAY_NAMES: { [key: string]: string } = {
   "anthropic.claude-3-opus-20240229-v1:0": "Claude 3 Opus",
   "anthropic.claude-3-haiku-20240307-v1:0": "Claude 3 Haiku",
   "anthropic.claude-3-5-sonnet-20240620-v1:0": "Claude 3.5 Sonnet",
+  "anthropic.claude-3-5-sonnet-20241022-v2:0": "Claude 3.5 Sonnet (New)",
   "anthropic.claude-3-sonnet-20240229-v1:0": "Claude 3 Sonnet",
   "mistral.mistral-large-2402-v1:0": "Mistral Large",
   "mistral.mixtral-8x7b-instruct-v0:1": "Mixtral 8x7B Instruct",
@@ -312,7 +348,7 @@ export const defaultModelsByProvider: { [name: string]: string[] } = {
     "meta.llama3-1-8b-instruct-v1:0",
     "anthropic.claude-3-opus-20240229-v1:0",
     "mistral.mistral-large-2402-v1:0",
-    "anthropic.claude-3-5-sonnet-20240620-v1:0",
+    "anthropic.claude-3-5-sonnet-20241022-v2:0",
   ],
-  anthropic: ["claude-3-opus-20240229", "claude-3-5-sonnet-20240620"],
+  anthropic: ["claude-3-opus-20240229", "claude-3-5-sonnet-20241022"],
 };

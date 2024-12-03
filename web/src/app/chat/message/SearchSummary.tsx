@@ -4,7 +4,12 @@ import {
 } from "@/components/BasicClickable";
 import { HoverPopup } from "@/components/HoverPopup";
 import { Hoverable } from "@/components/Hoverable";
-import { Tooltip } from "@/components/tooltip/Tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useEffect, useRef, useState } from "react";
 import { FiCheck, FiEdit2, FiSearch, FiX } from "react-icons/fi";
 
@@ -36,6 +41,7 @@ export function ShowHideDocsButton({
 }
 
 export function SearchSummary({
+  index,
   query,
   hasDocs,
   finished,
@@ -43,6 +49,7 @@ export function SearchSummary({
   handleShowRetrieved,
   handleSearchQueryEdit,
 }: {
+  index: number;
   finished: boolean;
   query: string;
   hasDocs: boolean;
@@ -93,7 +100,14 @@ export function SearchSummary({
         !text-sm !line-clamp-1 !break-all px-0.5`}
         ref={searchingForRef}
       >
-        {finished ? "Searched" : "Searching"} for: <i> {finalQuery}</i>
+        {finished ? "Searched" : "Searching"} for:{" "}
+        <i>
+          {index === 1
+            ? finalQuery.length > 50
+              ? `${finalQuery.slice(0, 50)}...`
+              : finalQuery
+            : finalQuery}
+        </i>
       </div>
     </div>
   );
@@ -169,16 +183,21 @@ export function SearchSummary({
             )}
           </div>
           {handleSearchQueryEdit && (
-            <Tooltip delayDuration={1000} content={"Edit Search"}>
-              <button
-                className="my-auto hover:bg-hover p-1.5 rounded"
-                onClick={() => {
-                  setIsEditing(true);
-                }}
-              >
-                <FiEdit2 />
-              </button>
-            </Tooltip>
+            <TooltipProvider delayDuration={1000}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    className="my-auto hover:bg-hover p-1.5 rounded"
+                    onClick={() => {
+                      setIsEditing(true);
+                    }}
+                  >
+                    <FiEdit2 />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>Edit Search</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
         </>
       )}

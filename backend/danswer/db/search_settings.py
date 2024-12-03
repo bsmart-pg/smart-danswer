@@ -12,7 +12,8 @@ from danswer.configs.model_configs import NORMALIZE_EMBEDDINGS
 from danswer.configs.model_configs import OLD_DEFAULT_DOCUMENT_ENCODER_MODEL
 from danswer.configs.model_configs import OLD_DEFAULT_MODEL_DOC_EMBEDDING_DIM
 from danswer.configs.model_configs import OLD_DEFAULT_MODEL_NORMALIZE_EMBEDDINGS
-from danswer.db.engine import get_sqlalchemy_engine
+from danswer.context.search.models import SavedSearchSettings
+from danswer.db.engine import get_session_with_default_tenant
 from danswer.db.llm import fetch_embedding_provider
 from danswer.db.models import CloudEmbeddingProvider
 from danswer.db.models import IndexAttempt
@@ -21,7 +22,6 @@ from danswer.db.models import SearchSettings
 from danswer.indexing.models import IndexingSetting
 from danswer.natural_language_processing.search_nlp_models import clean_model_name
 from danswer.natural_language_processing.search_nlp_models import warm_up_cross_encoder
-from danswer.search.models import SavedSearchSettings
 from danswer.server.manage.embedding.models import (
     CloudEmbeddingProvider as ServerCloudEmbeddingProvider,
 )
@@ -143,6 +143,25 @@ def get_secondary_search_settings(db_session: Session) -> SearchSettings | None:
     return latest_settings
 
 
+def get_active_search_settings(db_session: Session) -> list[SearchSettings]:
+    """Returns active search settings. The first entry will always be the current search
+    settings. If there are new search settings that are being migrated to, those will be
+    the second entry."""
+    search_settings_list: list[SearchSettings] = []
+
+    # Get the primary search settings
+    primary_search_settings = get_current_search_settings(db_session)
+    search_settings_list.append(primary_search_settings)
+
+    # Check for secondary search settings
+    secondary_search_settings = get_secondary_search_settings(db_session)
+    if secondary_search_settings is not None:
+        # If secondary settings exist, add them to the list
+        search_settings_list.append(secondary_search_settings)
+
+    return search_settings_list
+
+
 def get_all_search_settings(db_session: Session) -> list[SearchSettings]:
     query = select(SearchSettings).order_by(SearchSettings.id.desc())
     result = db_session.execute(query)
@@ -152,7 +171,7 @@ def get_all_search_settings(db_session: Session) -> list[SearchSettings]:
 
 def get_multilingual_expansion(db_session: Session | None = None) -> list[str]:
     if db_session is None:
-        with Session(get_sqlalchemy_engine()) as db_session:
+        with get_session_with_default_tenant() as db_session:
             search_settings = get_current_search_settings(db_session)
     else:
         search_settings = get_current_search_settings(db_session)

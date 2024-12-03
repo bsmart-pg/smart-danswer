@@ -1,6 +1,8 @@
 import json
 import os
+import traceback
 from collections.abc import Iterator
+from collections.abc import Sequence
 from typing import Any
 from typing import cast
 
@@ -21,15 +23,20 @@ from langchain_core.messages import SystemMessage
 from langchain_core.messages import SystemMessageChunk
 from langchain_core.messages.tool import ToolCallChunk
 from langchain_core.messages.tool import ToolMessage
+from langchain_core.prompt_values import PromptValue
 
-from danswer.configs.app_configs import LOG_ALL_MODEL_INTERACTIONS
 from danswer.configs.app_configs import LOG_DANSWER_MODEL_INTERACTIONS
-from danswer.configs.model_configs import DISABLE_LITELLM_STREAMING
+from danswer.configs.model_configs import (
+    DISABLE_LITELLM_STREAMING,
+)
 from danswer.configs.model_configs import GEN_AI_TEMPERATURE
+from danswer.configs.model_configs import LITELLM_EXTRA_BODY
 from danswer.llm.interfaces import LLM
 from danswer.llm.interfaces import LLMConfig
 from danswer.llm.interfaces import ToolChoiceOptions
+from danswer.server.utils import mask_string
 from danswer.utils.logger import setup_logger
+from danswer.utils.long_term_log import LongTermLogger
 
 
 logger = setup_logger()
@@ -39,7 +46,7 @@ logger = setup_logger()
 litellm.drop_params = True
 litellm.telemetry = False
 
-litellm.set_verbose = LOG_ALL_MODEL_INTERACTIONS
+_LLM_PROMPT_LONG_TERM_LOG_CATEGORY = "llm_prompt"
 
 
 def _base_msg_to_role(msg: BaseMessage) -> str:
@@ -83,8 +90,10 @@ def _convert_litellm_message_to_langchain_message(
                     "args": json.loads(tool_call.function.arguments),
                     "id": tool_call.id,
                 }
-                for tool_call in (tool_calls if tool_calls else [])
-            ],
+                for tool_call in tool_calls
+            ]
+            if tool_calls
+            else [],
         )
     elif role == "system":
         return SystemMessage(content=content)
@@ -109,7 +118,7 @@ def _convert_message_to_dict(message: BaseMessage) -> dict:
                         "arguments": json.dumps(tool_call["args"]),
                     },
                     "type": "function",
-                    "index": 0,  # only support a single tool call atm
+                    "index": tool_call.get("index", 0),
                 }
                 for tool_call in message.tool_calls
             ]
@@ -154,16 +163,19 @@ def _convert_delta_to_message_chunk(
 
     if role == "user":
         return HumanMessageChunk(content=content)
-    elif role == "assistant":
+    # NOTE: if tool calls are present, then it's an assistant.
+    # In Ollama, the role will be None for tool-calls
+    elif role == "assistant" or tool_calls:
         if tool_calls:
             tool_call = tool_calls[0]
             tool_name = tool_call.function.name or (curr_msg and curr_msg.name) or ""
+            idx = tool_call.index
 
             tool_call_chunk = ToolCallChunk(
                 name=tool_name,
                 id=tool_call.id,
                 args=tool_call.function.arguments,
-                index=0,  # only support a single tool call atm
+                index=idx,
             )
 
             return AIMessageChunk(
@@ -192,6 +204,23 @@ def _convert_delta_to_message_chunk(
     raise ValueError(f"Unknown role: {role}")
 
 
+def _prompt_to_dict(
+    prompt: LanguageModelInput,
+) -> Sequence[str | list[str] | dict[str, Any] | tuple[str, str]]:
+    # NOTE: this must go first, since it is also a Sequence
+    if isinstance(prompt, str):
+        return [_convert_message_to_dict(HumanMessage(content=prompt))]
+
+    if isinstance(prompt, (list, Sequence)):
+        return [
+            _convert_message_to_dict(msg) if isinstance(msg, BaseMessage) else msg
+            for msg in prompt
+        ]
+
+    if isinstance(prompt, PromptValue):
+        return [_convert_message_to_dict(message) for message in prompt.to_messages()]
+
+
 class DefaultMultiLLM(LLM):
     """Uses Litellm library to allow easy configuration to use a multitude of LLMs
     See https://python.langchain.com/docs/integrations/chat/litellm"""
@@ -204,20 +233,26 @@ class DefaultMultiLLM(LLM):
         model_name: str,
         api_base: str | None = None,
         api_version: str | None = None,
+        deployment_name: str | None = None,
         max_output_tokens: int | None = None,
         custom_llm_provider: str | None = None,
         temperature: float = GEN_AI_TEMPERATURE,
         custom_config: dict[str, str] | None = None,
         extra_headers: dict[str, str] | None = None,
+        extra_body: dict | None = LITELLM_EXTRA_BODY,
+        model_kwargs: dict[str, Any] | None = None,
+        long_term_logger: LongTermLogger | None = None,
     ):
         self._timeout = timeout
         self._model_provider = model_provider
         self._model_version = model_name
         self._temperature = temperature
         self._api_key = api_key
+        self._deployment_name = deployment_name
         self._api_base = api_base
         self._api_version = api_version
         self._custom_llm_provider = custom_llm_provider
+        self._long_term_logger = long_term_logger
 
         # This can be used to store the maximum output tokens for this model.
         # self._max_output_tokens = (
@@ -238,14 +273,62 @@ class DefaultMultiLLM(LLM):
             for k, v in custom_config.items():
                 os.environ[k] = v
 
-        model_kwargs: dict[str, Any] = {}
+        model_kwargs = model_kwargs or {}
         if extra_headers:
             model_kwargs.update({"extra_headers": extra_headers})
+        if extra_body:
+            model_kwargs.update({"extra_body": extra_body})
 
         self._model_kwargs = model_kwargs
 
     def log_model_configs(self) -> None:
         logger.debug(f"Config: {self.config}")
+
+    def _safe_model_config(self) -> dict:
+        dump = self.config.model_dump()
+        dump["api_key"] = mask_string(dump.get("api_key", ""))
+        return dump
+
+    def _record_call(self, prompt: LanguageModelInput) -> None:
+        if self._long_term_logger:
+            self._long_term_logger.record(
+                {"prompt": _prompt_to_dict(prompt), "model": self._safe_model_config()},
+                category=_LLM_PROMPT_LONG_TERM_LOG_CATEGORY,
+            )
+
+    def _record_result(
+        self, prompt: LanguageModelInput, model_output: BaseMessage
+    ) -> None:
+        if self._long_term_logger:
+            self._long_term_logger.record(
+                {
+                    "prompt": _prompt_to_dict(prompt),
+                    "content": model_output.content,
+                    "tool_calls": (
+                        model_output.tool_calls
+                        if hasattr(model_output, "tool_calls")
+                        else []
+                    ),
+                    "model": self._safe_model_config(),
+                },
+                category=_LLM_PROMPT_LONG_TERM_LOG_CATEGORY,
+            )
+
+    def _record_error(self, prompt: LanguageModelInput, error: Exception) -> None:
+        if self._long_term_logger:
+            self._long_term_logger.record(
+                {
+                    "prompt": _prompt_to_dict(prompt),
+                    "error": str(error),
+                    "traceback": "".join(
+                        traceback.format_exception(
+                            type(error), error, error.__traceback__
+                        )
+                    ),
+                    "model": self._safe_model_config(),
+                },
+                category=_LLM_PROMPT_LONG_TERM_LOG_CATEGORY,
+            )
 
     # def _calculate_max_output_tokens(self, prompt: LanguageModelInput) -> int:
     #     # NOTE: This method can be used for calculating the maximum tokens for the stream,
@@ -277,20 +360,17 @@ class DefaultMultiLLM(LLM):
         tools: list[dict] | None,
         tool_choice: ToolChoiceOptions | None,
         stream: bool,
+        structured_response_format: dict | None = None,
     ) -> litellm.ModelResponse | litellm.CustomStreamWrapper:
-        if isinstance(prompt, list):
-            prompt = [
-                _convert_message_to_dict(msg) if isinstance(msg, BaseMessage) else msg
-                for msg in prompt
-            ]
-
-        elif isinstance(prompt, str):
-            prompt = [_convert_message_to_dict(HumanMessage(content=prompt))]
+        # litellm doesn't accept LangChain BaseMessage objects, so we need to convert them
+        # to a dict representation
+        processed_prompt = _prompt_to_dict(prompt)
+        self._record_call(processed_prompt)
 
         try:
             return litellm.completion(
                 # model choice
-                model=f"{self.config.model_provider}/{self.config.model_name}",
+                model=f"{self.config.model_provider}/{self.config.deployment_name or self.config.model_name}",
                 # NOTE: have to pass in None instead of empty string for these
                 # otherwise litellm can have some issues with bedrock
                 api_key=self._api_key or None,
@@ -298,7 +378,7 @@ class DefaultMultiLLM(LLM):
                 api_version=self._api_version or None,
                 custom_llm_provider=self._custom_llm_provider or None,
                 # actual input
-                messages=prompt,
+                messages=processed_prompt,
                 tools=tools,
                 tool_choice=tool_choice if tools else None,
                 # streaming choice
@@ -310,9 +390,15 @@ class DefaultMultiLLM(LLM):
                 # NOTE: we can't pass this in if tools are not specified
                 # or else OpenAI throws an error
                 **({"parallel_tool_calls": False} if tools else {}),
+                **(
+                    {"response_format": structured_response_format}
+                    if structured_response_format
+                    else {}
+                ),
                 **self._model_kwargs,
             )
         except Exception as e:
+            self._record_error(processed_prompt, e)
             # for break pointing
             raise e
 
@@ -325,6 +411,7 @@ class DefaultMultiLLM(LLM):
             api_key=self._api_key,
             api_base=self._api_base,
             api_version=self._api_version,
+            deployment_name=self._deployment_name,
         )
 
     def _invoke_implementation(
@@ -332,16 +419,23 @@ class DefaultMultiLLM(LLM):
         prompt: LanguageModelInput,
         tools: list[dict] | None = None,
         tool_choice: ToolChoiceOptions | None = None,
+        structured_response_format: dict | None = None,
     ) -> BaseMessage:
         if LOG_DANSWER_MODEL_INTERACTIONS:
             self.log_model_configs()
 
         response = cast(
-            litellm.ModelResponse, self._completion(prompt, tools, tool_choice, False)
+            litellm.ModelResponse,
+            self._completion(
+                prompt, tools, tool_choice, False, structured_response_format
+            ),
         )
         choice = response.choices[0]
         if hasattr(choice, "message"):
-            return _convert_litellm_message_to_langchain_message(choice.message)
+            output = _convert_litellm_message_to_langchain_message(choice.message)
+            if output:
+                self._record_result(prompt, output)
+            return output
         else:
             raise ValueError("Unexpected response choice type")
 
@@ -350,18 +444,21 @@ class DefaultMultiLLM(LLM):
         prompt: LanguageModelInput,
         tools: list[dict] | None = None,
         tool_choice: ToolChoiceOptions | None = None,
+        structured_response_format: dict | None = None,
     ) -> Iterator[BaseMessage]:
         if LOG_DANSWER_MODEL_INTERACTIONS:
             self.log_model_configs()
 
         if DISABLE_LITELLM_STREAMING:
-            yield self.invoke(prompt)
+            yield self.invoke(prompt, tools, tool_choice, structured_response_format)
             return
 
         output = None
         response = cast(
             litellm.CustomStreamWrapper,
-            self._completion(prompt, tools, tool_choice, True),
+            self._completion(
+                prompt, tools, tool_choice, True, structured_response_format
+            ),
         )
         try:
             for part in response:
@@ -386,6 +483,9 @@ class DefaultMultiLLM(LLM):
             raise RuntimeError(
                 "The AI model failed partway through generation, please try again."
             )
+
+        if output:
+            self._record_result(prompt, output)
 
         if LOG_DANSWER_MODEL_INTERACTIONS and output:
             content = output.content or ""

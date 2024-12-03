@@ -3,6 +3,7 @@ from datetime import datetime
 from datetime import timedelta
 from uuid import UUID
 
+from fastapi import HTTPException
 from sqlalchemy import delete
 from sqlalchemy import desc
 from sqlalchemy import func
@@ -18,6 +19,9 @@ from danswer.auth.schemas import UserRole
 from danswer.chat.models import DocumentRelevance
 from danswer.configs.chat_configs import HARD_DELETE_CHATS
 from danswer.configs.constants import MessageType
+from danswer.context.search.models import RetrievalDocs
+from danswer.context.search.models import SavedSearchDoc
+from danswer.context.search.models import SearchDoc as ServerSearchDoc
 from danswer.db.models import ChatMessage
 from danswer.db.models import ChatMessage__SearchDoc
 from danswer.db.models import ChatSession
@@ -27,13 +31,11 @@ from danswer.db.models import SearchDoc
 from danswer.db.models import SearchDoc as DBSearchDoc
 from danswer.db.models import ToolCall
 from danswer.db.models import User
+from danswer.db.persona import get_best_persona_id_for_user
 from danswer.db.pg_file_store import delete_lobj_by_name
 from danswer.file_store.models import FileDescriptor
 from danswer.llm.override_models import LLMOverride
 from danswer.llm.override_models import PromptOverride
-from danswer.search.models import RetrievalDocs
-from danswer.search.models import SavedSearchDoc
-from danswer.search.models import SearchDoc as ServerSearchDoc
 from danswer.server.query_and_chat.models import ChatMessageDetail
 from danswer.tools.tool_runner import ToolCallFinalResult
 from danswer.utils.logger import setup_logger
@@ -43,7 +45,7 @@ logger = setup_logger()
 
 
 def get_chat_session_by_id(
-    chat_session_id: int,
+    chat_session_id: UUID,
     user_id: UUID | None,
     db_session: Session,
     include_deleted: bool = False,
@@ -87,9 +89,9 @@ def get_chat_sessions_by_slack_thread_id(
 
 
 def get_valid_messages_from_query_sessions(
-    chat_session_ids: list[int],
+    chat_session_ids: list[UUID],
     db_session: Session,
-) -> dict[int, str]:
+) -> dict[UUID, str]:
     user_message_subquery = (
         select(
             ChatMessage.chat_session_id, func.min(ChatMessage.id).label("user_msg_id")
@@ -196,7 +198,7 @@ def delete_orphaned_search_docs(db_session: Session) -> None:
 
 
 def delete_messages_and_files_from_chat_session(
-    chat_session_id: int, db_session: Session
+    chat_session_id: UUID, db_session: Session
 ) -> None:
     # Select messages older than cutoff_time with files
     messages_with_files = db_session.execute(
@@ -250,10 +252,54 @@ def create_chat_session(
     return chat_session
 
 
+def duplicate_chat_session_for_user_from_slack(
+    db_session: Session,
+    user: User | None,
+    chat_session_id: UUID,
+) -> ChatSession:
+    """
+    This takes a chat session id for a session in Slack and:
+    - Creates a new chat session in the DB
+    - Tries to copy the persona from the original chat session
+        (if it is available to the user clicking the button)
+    - Sets the user to the given user (if provided)
+    """
+    chat_session = get_chat_session_by_id(
+        chat_session_id=chat_session_id,
+        user_id=None,  # Ignore user permissions for this
+        db_session=db_session,
+    )
+    if not chat_session:
+        raise HTTPException(status_code=400, detail="Invalid Chat Session ID provided")
+
+    # This enforces permissions and sets a default
+    new_persona_id = get_best_persona_id_for_user(
+        db_session=db_session,
+        user=user,
+        persona_id=chat_session.persona_id,
+    )
+
+    return create_chat_session(
+        db_session=db_session,
+        user_id=user.id if user else None,
+        persona_id=new_persona_id,
+        # Set this to empty string so the frontend will force a rename
+        description="",
+        llm_override=chat_session.llm_override,
+        prompt_override=chat_session.prompt_override,
+        # Chat sessions from Slack should put people in the chat UI, not the search
+        one_shot=False,
+        # Chat is in UI now so this is false
+        danswerbot_flow=False,
+        # Maybe we want this in the future to track if it was created from Slack
+        slack_thread_id=None,
+    )
+
+
 def update_chat_session(
     db_session: Session,
     user_id: UUID | None,
-    chat_session_id: int,
+    chat_session_id: UUID,
     description: str | None = None,
     sharing_status: ChatSessionSharedStatus | None = None,
 ) -> ChatSession:
@@ -276,7 +322,7 @@ def update_chat_session(
 
 def delete_chat_session(
     user_id: UUID | None,
-    chat_session_id: int,
+    chat_session_id: UUID,
     db_session: Session,
     hard_delete: bool = HARD_DELETE_CHATS,
 ) -> None:
@@ -336,8 +382,30 @@ def get_chat_message(
     return chat_message
 
 
+def get_chat_session_by_message_id(
+    db_session: Session,
+    message_id: int,
+) -> ChatSession:
+    """
+    Should only be used for Slack
+    Get the chat session associated with a specific message ID
+    Note: this ignores permission checks.
+    """
+    stmt = select(ChatMessage).where(ChatMessage.id == message_id)
+
+    result = db_session.execute(stmt)
+    chat_message = result.scalar_one_or_none()
+
+    if chat_message is None:
+        raise ValueError(
+            f"Unable to find chat session associated with message ID: {message_id}"
+        )
+
+    return chat_message.chat_session
+
+
 def get_chat_messages_by_sessions(
-    chat_session_ids: list[int],
+    chat_session_ids: list[UUID],
     user_id: UUID | None,
     db_session: Session,
     skip_permission_check: bool = False,
@@ -355,6 +423,44 @@ def get_chat_messages_by_sessions(
     return db_session.execute(stmt).scalars().all()
 
 
+def add_chats_to_session_from_slack_thread(
+    db_session: Session,
+    slack_chat_session_id: UUID,
+    new_chat_session_id: UUID,
+) -> None:
+    new_root_message = get_or_create_root_message(
+        chat_session_id=new_chat_session_id,
+        db_session=db_session,
+    )
+
+    for chat_message in get_chat_messages_by_sessions(
+        chat_session_ids=[slack_chat_session_id],
+        user_id=None,  # Ignore user permissions for this
+        db_session=db_session,
+        skip_permission_check=True,
+    ):
+        if chat_message.message_type == MessageType.SYSTEM:
+            continue
+        # Duplicate the message
+        new_root_message = create_new_chat_message(
+            db_session=db_session,
+            chat_session_id=new_chat_session_id,
+            parent_message=new_root_message,
+            message=chat_message.message,
+            files=chat_message.files,
+            rephrased_query=chat_message.rephrased_query,
+            error=chat_message.error,
+            citations=chat_message.citations,
+            reference_docs=chat_message.search_docs,
+            tool_call=chat_message.tool_call,
+            prompt_id=chat_message.prompt_id,
+            token_count=chat_message.token_count,
+            message_type=chat_message.message_type,
+            alternate_assistant_id=chat_message.alternate_assistant_id,
+            overridden_model=chat_message.overridden_model,
+        )
+
+
 def get_search_docs_for_chat_message(
     chat_message_id: int, db_session: Session
 ) -> list[SearchDoc]:
@@ -370,7 +476,7 @@ def get_search_docs_for_chat_message(
 
 
 def get_chat_messages_by_session(
-    chat_session_id: int,
+    chat_session_id: UUID,
     user_id: UUID | None,
     db_session: Session,
     skip_permission_check: bool = False,
@@ -388,7 +494,7 @@ def get_chat_messages_by_session(
     )
 
     if prefetch_tool_calls:
-        stmt = stmt.options(joinedload(ChatMessage.tool_calls))
+        stmt = stmt.options(joinedload(ChatMessage.tool_call))
         result = db_session.scalars(stmt).unique().all()
     else:
         result = db_session.scalars(stmt).all()
@@ -397,7 +503,7 @@ def get_chat_messages_by_session(
 
 
 def get_or_create_root_message(
-    chat_session_id: int,
+    chat_session_id: UUID,
     db_session: Session,
 ) -> ChatMessage:
     try:
@@ -433,7 +539,7 @@ def get_or_create_root_message(
 
 def reserve_message_id(
     db_session: Session,
-    chat_session_id: int,
+    chat_session_id: UUID,
     parent_message: int,
     message_type: MessageType,
 ) -> int:
@@ -460,7 +566,7 @@ def reserve_message_id(
 
 
 def create_new_chat_message(
-    chat_session_id: int,
+    chat_session_id: UUID,
     parent_message: ChatMessage,
     message: str,
     prompt_id: int | None,
@@ -474,7 +580,7 @@ def create_new_chat_message(
     alternate_assistant_id: int | None = None,
     # Maps the citation number [n] to the DB SearchDoc
     citations: dict[int, int] | None = None,
-    tool_calls: list[ToolCall] | None = None,
+    tool_call: ToolCall | None = None,
     commit: bool = True,
     reserved_message_id: int | None = None,
     overridden_model: str | None = None,
@@ -494,7 +600,7 @@ def create_new_chat_message(
         existing_message.message_type = message_type
         existing_message.citations = citations
         existing_message.files = files
-        existing_message.tool_calls = tool_calls if tool_calls else []
+        existing_message.tool_call = tool_call
         existing_message.error = error
         existing_message.alternate_assistant_id = alternate_assistant_id
         existing_message.overridden_model = overridden_model
@@ -513,7 +619,7 @@ def create_new_chat_message(
             message_type=message_type,
             citations=citations,
             files=files,
-            tool_calls=tool_calls if tool_calls else [],
+            tool_call=tool_call,
             error=error,
             alternate_assistant_id=alternate_assistant_id,
             overridden_model=overridden_model,
@@ -749,14 +855,13 @@ def translate_db_message_to_chat_message_detail(
         time_sent=chat_message.time_sent,
         citations=chat_message.citations,
         files=chat_message.files or [],
-        tool_calls=[
-            ToolCallFinalResult(
-                tool_name=tool_call.tool_name,
-                tool_args=tool_call.tool_arguments,
-                tool_result=tool_call.tool_result,
-            )
-            for tool_call in chat_message.tool_calls
-        ],
+        tool_call=ToolCallFinalResult(
+            tool_name=chat_message.tool_call.tool_name,
+            tool_args=chat_message.tool_call.tool_arguments,
+            tool_result=chat_message.tool_call.tool_result,
+        )
+        if chat_message.tool_call
+        else None,
         alternate_assistant_id=chat_message.alternate_assistant_id,
         overridden_model=chat_message.overridden_model,
     )

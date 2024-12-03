@@ -1,14 +1,16 @@
+from uuid import UUID
+
 from pydantic import BaseModel
 from pydantic import Field
 
 from danswer.configs.constants import DocumentSource
+from danswer.context.search.enums import LLMEvaluationType
+from danswer.context.search.enums import SearchType
+from danswer.context.search.models import ChunkContext
+from danswer.context.search.models import RerankingDetails
+from danswer.context.search.models import RetrievalDetails
+from danswer.context.search.models import SavedSearchDoc
 from danswer.one_shot_answer.models import ThreadMessage
-from danswer.search.enums import LLMEvaluationType
-from danswer.search.enums import SearchType
-from danswer.search.models import ChunkContext
-from danswer.search.models import RerankingDetails
-from danswer.search.models import RetrievalDetails
-from danswer.search.models import SavedSearchDoc
 from ee.danswer.server.manage.models import StandardAnswer
 
 
@@ -36,7 +38,7 @@ class BasicCreateChatMessageRequest(ChunkContext):
     Note, for simplicity this option only allows for a single linear chain of messages
     """
 
-    chat_session_id: int
+    chat_session_id: UUID
     # New message contents
     message: str
     # Defaults to using retrieval with no additional filters
@@ -46,6 +48,9 @@ class BasicCreateChatMessageRequest(ChunkContext):
     query_override: str | None = None
     # If search_doc_ids provided, then retrieval options are unused
     search_doc_ids: list[int] | None = None
+    # only works if using an OpenAI model. See the following for more details:
+    # https://platform.openai.com/docs/guides/structured-outputs/introduction
+    structured_response_format: dict | None = None
 
 
 class BasicCreateChatMessageWithHistoryRequest(ChunkContext):
@@ -58,6 +63,9 @@ class BasicCreateChatMessageWithHistoryRequest(ChunkContext):
     skip_rerank: bool | None = None
     # If search_doc_ids provided, then retrieval options are unused
     search_doc_ids: list[int] | None = None
+    # only works if using an OpenAI model. See the following for more details:
+    # https://platform.openai.com/docs/guides/structured-outputs/introduction
+    structured_response_format: dict | None = None
 
 
 class SimpleDoc(BaseModel):

@@ -1,5 +1,7 @@
 import { LoadingAnimation } from "@/components/Loading";
-import { Button, Divider, Text } from "@tremor/react";
+import Text from "@/components/ui/text";
+import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
 import { AdvancedOptionsToggle } from "@/components/AdvancedOptionsToggle";
 import {
   ArrayHelpers,
@@ -38,11 +40,13 @@ export function CustomLLMProviderUpdateForm({
   existingLlmProvider,
   shouldMarkAsDefault,
   setPopup,
+  hideSuccess,
 }: {
   onClose: () => void;
   existingLlmProvider?: FullLLMProvider;
   shouldMarkAsDefault?: boolean;
   setPopup?: (popup: PopupSpec) => void;
+  hideSuccess?: boolean;
 }) {
   const { mutate } = useSWRConfig();
 
@@ -67,6 +71,7 @@ export function CustomLLMProviderUpdateForm({
       : [],
     is_public: existingLlmProvider?.is_public ?? true,
     groups: existingLlmProvider?.groups ?? [],
+    deployment_name: existingLlmProvider?.deployment_name ?? null,
   };
 
   // Setup validation schema if required
@@ -83,6 +88,7 @@ export function CustomLLMProviderUpdateForm({
     // EE Only
     is_public: Yup.boolean().required(),
     groups: Yup.array().of(Yup.number()),
+    deployment_name: Yup.string().nullable(),
   });
 
   return (
@@ -105,9 +111,6 @@ export function CustomLLMProviderUpdateForm({
           setSubmitting(false);
           return;
         }
-
-        // don't set groups if marked as public
-        const groups = values.is_public ? [] : values.groups;
 
         // test the configuration
         if (!isEqual(values, initialValues)) {
@@ -139,6 +142,8 @@ export function CustomLLMProviderUpdateForm({
           },
           body: JSON.stringify({
             ...values,
+            // For custom llm providers, all model names are displayed
+            display_model_names: values.model_names,
             custom_config: customConfigProcessing(values.custom_config_list),
           }),
         });
@@ -188,7 +193,7 @@ export function CustomLLMProviderUpdateForm({
         const successMsg = existingLlmProvider
           ? "Provider updated successfully!"
           : "Provider enabled successfully!";
-        if (setPopup) {
+        if (!hideSuccess && setPopup) {
           setPopup({
             type: "success",
             message: successMsg,
@@ -208,6 +213,7 @@ export function CustomLLMProviderUpdateForm({
               label="Display Name"
               subtext="A name which you can use to identify this provider when selecting it in the UI."
               placeholder="Display Name"
+              disabled={existingLlmProvider ? true : false}
             />
 
             <TextFormField
@@ -230,7 +236,7 @@ export function CustomLLMProviderUpdateForm({
               placeholder="Name of the custom provider"
             />
 
-            <Divider />
+            <Separator />
 
             <SubLabel>
               Fill in the following as is needed. Refer to the LiteLLM
@@ -244,6 +250,14 @@ export function CustomLLMProviderUpdateForm({
               placeholder="API Key"
               type="password"
             />
+
+            {existingLlmProvider?.deployment_name && (
+              <TextFormField
+                name="deployment_name"
+                label="[Optional] Deployment Name"
+                placeholder="Deployment Name"
+              />
+            )}
 
             <TextFormField
               name="api_base"
@@ -347,8 +361,7 @@ export function CustomLLMProviderUpdateForm({
                       arrayHelpers.push(["", ""]);
                     }}
                     className="mt-3"
-                    color="green"
-                    size="xs"
+                    variant="next"
                     type="button"
                     icon={FiPlus}
                   >
@@ -358,32 +371,34 @@ export function CustomLLMProviderUpdateForm({
               )}
             />
 
-            <Divider />
+            <Separator />
 
-            <TextArrayField
-              name="model_names"
-              label="Model Names"
-              values={formikProps.values}
-              subtext={
-                <>
-                  List the individual models that you want to make available as
-                  a part of this provider. At least one must be specified. For
-                  the best experience your [Provider Name]/[Model Name] should
-                  match one of the pairs listed{" "}
-                  <a
-                    target="_blank"
-                    href="https://models.litellm.ai/"
-                    className="text-link"
-                    rel="noreferrer"
-                  >
-                    here
-                  </a>
-                  .
-                </>
-              }
-            />
+            {!existingLlmProvider?.deployment_name && (
+              <TextArrayField
+                name="model_names"
+                label="Model Names"
+                values={formikProps.values}
+                subtext={
+                  <>
+                    List the individual models that you want to make available
+                    as a part of this provider. At least one must be specified.
+                    For the best experience your [Provider Name]/[Model Name]
+                    should match one of the pairs listed{" "}
+                    <a
+                      target="_blank"
+                      href="https://models.litellm.ai/"
+                      className="text-link"
+                      rel="noreferrer"
+                    >
+                      here
+                    </a>
+                    .
+                  </>
+                }
+              />
+            )}
 
-            <Divider />
+            <Separator />
 
             <TextFormField
               name="default_model_name"
@@ -395,16 +410,18 @@ export function CustomLLMProviderUpdateForm({
               placeholder="E.g. gpt-4"
             />
 
-            <TextFormField
-              name="fast_default_model_name"
-              subtext={`The model to use for lighter flows like \`LLM Chunk Filter\` 
+            {!existingLlmProvider?.deployment_name && (
+              <TextFormField
+                name="fast_default_model_name"
+                subtext={`The model to use for lighter flows like \`LLM Chunk Filter\` 
                 for this provider. If not set, will use 
                 the Default Model configured above.`}
-              label="[Optional] Fast Model"
-              placeholder="E.g. gpt-4"
-            />
+                label="[Optional] Fast Model"
+                placeholder="E.g. gpt-4"
+              />
+            )}
 
-            <Divider />
+            <Separator />
 
             <AdvancedOptionsToggle
               showAdvancedOptions={showAdvancedOptions}
@@ -427,7 +444,7 @@ export function CustomLLMProviderUpdateForm({
               )}
 
               <div className="flex w-full mt-4">
-                <Button type="submit" size="xs">
+                <Button type="submit" variant="submit">
                   {isTesting ? (
                     <LoadingAnimation text="Testing" />
                   ) : existingLlmProvider ? (
@@ -439,9 +456,7 @@ export function CustomLLMProviderUpdateForm({
                 {existingLlmProvider && (
                   <Button
                     type="button"
-                    color="red"
-                    className="ml-3"
-                    size="xs"
+                    variant="destructive"
                     icon={FiTrash}
                     onClick={async () => {
                       const response = await fetch(

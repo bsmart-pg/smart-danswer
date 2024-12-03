@@ -18,6 +18,9 @@ from danswer.chat.process_message import ChatPacketStream
 from danswer.chat.process_message import stream_chat_message_objects
 from danswer.configs.constants import MessageType
 from danswer.configs.danswerbot_configs import DANSWER_BOT_TARGET_CHUNK_PERCENTAGE
+from danswer.context.search.models import OptionalSearchSetting
+from danswer.context.search.models import RetrievalDetails
+from danswer.context.search.models import SavedSearchDoc
 from danswer.db.chat import create_chat_session
 from danswer.db.chat import create_new_chat_message
 from danswer.db.chat import get_or_create_root_message
@@ -27,9 +30,6 @@ from danswer.llm.factory import get_llms_for_persona
 from danswer.llm.utils import get_max_input_tokens
 from danswer.natural_language_processing.utils import get_tokenizer
 from danswer.one_shot_answer.qa_utils import combine_message_thread
-from danswer.search.models import OptionalSearchSetting
-from danswer.search.models import RetrievalDetails
-from danswer.search.models import SavedSearchDoc
 from danswer.secondary_llm_flows.query_expansion import thread_based_query_rephrase
 from danswer.server.query_and_chat.models import ChatMessageDetail
 from danswer.server.query_and_chat.models import CreateChatMessageRequest
@@ -176,6 +176,7 @@ def handle_simplified_chat_message(
         chunks_above=0,
         chunks_below=0,
         full_doc=chat_message_req.full_doc,
+        structured_response_format=chat_message_req.structured_response_format,
     )
 
     packets = stream_chat_message_objects(
@@ -202,7 +203,7 @@ def handle_send_message_simple_with_history(
         raise HTTPException(status_code=400, detail="Messages cannot be zero length")
 
     # This is a sanity check to make sure the chat history is valid
-    # It must start with a user message and alternate between user and assistant
+    # It must start with a user message and alternate beteen user and assistant
     expected_role = MessageType.USER
     for msg in req.messages:
         if not msg.message:
@@ -296,6 +297,7 @@ def handle_send_message_simple_with_history(
         chunks_above=0,
         chunks_below=0,
         full_doc=req.full_doc,
+        structured_response_format=req.structured_response_format,
     )
 
     packets = stream_chat_message_objects(

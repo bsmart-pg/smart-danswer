@@ -2,7 +2,7 @@ import { useChatContext } from "@/components/context/ChatContext";
 import { LlmOverrideManager } from "@/lib/hooks";
 import React, { forwardRef, useCallback, useState } from "react";
 import { debounce } from "lodash";
-import { Text } from "@tremor/react";
+import Text from "@/components/ui/text";
 import { Persona } from "@/app/admin/assistants/interfaces";
 import { destructureValue } from "@/lib/llm/utils";
 import { updateModelOverrideForChatSession } from "../../lib";
@@ -14,7 +14,7 @@ interface LlmTabProps {
   llmOverrideManager: LlmOverrideManager;
   currentLlm: string;
   openModelSettings: () => void;
-  chatSessionId?: number;
+  chatSessionId?: string;
   close: () => void;
   currentAssistant: Persona;
 }

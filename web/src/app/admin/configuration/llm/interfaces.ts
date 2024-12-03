@@ -4,6 +4,7 @@ import {
   AzureIcon,
   CPUIcon,
   OpenAIIcon,
+  GeminiIcon,
   OpenSourceIcon,
 } from "@/components/icons/icons";
 import { FaRobot } from "react-icons/fa";
@@ -19,11 +20,13 @@ export interface WellKnownLLMProviderDescriptor {
   name: string;
   display_name: string;
 
+  deployment_name_required: boolean;
   api_key_required: boolean;
   api_base_required: boolean;
   api_version_required: boolean;
-  custom_config_keys: CustomConfigKey[] | null;
 
+  single_model_supported: boolean;
+  custom_config_keys: CustomConfigKey[] | null;
   llm_names: string[];
   default_model: string | null;
   default_fast_model: string | null;
@@ -43,6 +46,7 @@ export interface LLMProvider {
   is_public: boolean;
   groups: number[];
   display_model_names: string[] | null;
+  deployment_name: string | null;
 }
 
 export interface FullLLMProvider extends LLMProvider {
@@ -64,10 +68,17 @@ export interface LLMProviderDescriptor {
   display_model_names: string[] | null;
 }
 
-export const getProviderIcon = (providerName: string) => {
+export const getProviderIcon = (providerName: string, modelName?: string) => {
   switch (providerName) {
     case "openai":
-      return OpenAIIcon;
+      // Special cases for openai based on modelName
+      if (modelName?.toLowerCase().includes("gemini")) {
+        return GeminiIcon;
+      }
+      if (modelName?.toLowerCase().includes("claude")) {
+        return AnthropicIcon;
+      }
+      return OpenAIIcon; // Default for openai
     case "anthropic":
       return AnthropicIcon;
     case "bedrock":

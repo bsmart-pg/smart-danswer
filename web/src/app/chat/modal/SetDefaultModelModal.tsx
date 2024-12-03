@@ -1,6 +1,6 @@
-import { Dispatch, SetStateAction, useEffect, useRef } from "react";
-import { ModalWrapper } from "@/components/modals/ModalWrapper";
-import { Text } from "@tremor/react";
+import { Dispatch, SetStateAction, useContext, useEffect, useRef } from "react";
+import { Modal } from "@/components/Modal";
+import Text from "@/components/ui/text";
 import { getDisplayNameForModel, LlmOverride } from "@/lib/hooks";
 import { LLMProviderDescriptor } from "@/app/admin/configuration/llm/interfaces";
 
@@ -8,6 +8,11 @@ import { destructureValue, structureValue } from "@/lib/llm/utils";
 import { setUserDefaultModel } from "@/lib/users/UserSettings";
 import { useRouter } from "next/navigation";
 import { PopupSpec } from "@/components/admin/connectors/Popup";
+import { useUser } from "@/components/user/UserProvider";
+import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/admin/connectors/Field";
+import { SettingsContext } from "@/components/settings/SettingsProvider";
 
 export function SetDefaultModelModal({
   setPopup,
@@ -15,15 +20,14 @@ export function SetDefaultModelModal({
   onClose,
   setLlmOverride,
   defaultModel,
-  refreshUser,
 }: {
   setPopup: (popupSpec: PopupSpec | null) => void;
   llmProviders: LLMProviderDescriptor[];
   setLlmOverride: Dispatch<SetStateAction<LlmOverride>>;
   onClose: () => void;
   defaultModel: string | null;
-  refreshUser: () => void;
 }) {
+  const { refreshUser, user, updateUserAutoScroll } = useUser();
   const containerRef = useRef<HTMLDivElement>(null);
   const messageRef = useRef<HTMLDivElement>(null);
 
@@ -121,18 +125,40 @@ export function SetDefaultModelModal({
   const defaultProvider = llmProviders.find(
     (llmProvider) => llmProvider.is_default_provider
   );
+  const settings = useContext(SettingsContext);
+  const autoScroll = settings?.enterpriseSettings?.auto_scroll;
+
+  const checked =
+    user?.preferences?.auto_scroll === null
+      ? autoScroll
+      : user?.preferences?.auto_scroll;
 
   return (
-    <ModalWrapper
-      onClose={onClose}
-      modalClassName="rounded-lg  bg-white max-w-xl"
-    >
+    <Modal onOutsideClick={onClose} width="rounded-lg  bg-white max-w-xl">
       <>
         <div className="flex mb-4">
           <h2 className="text-2xl text-emphasis font-bold flex my-auto">
-            Set Default Model
+            User settings
           </h2>
         </div>
+
+        <div className="flex flex-col gap-y-2">
+          <div className="flex items-center gap-x-2">
+            <Switch
+              checked={checked}
+              onCheckedChange={(checked) => {
+                updateUserAutoScroll(checked);
+              }}
+            />
+            <Label className="text-sm">Enable auto-scroll</Label>
+          </div>
+        </div>
+
+        <Separator />
+
+        <h3 className="text-lg text-emphasis font-bold">
+          Default model for assistants
+        </h3>
 
         <Text className="mb-4">
           Choose a Large Language Model (LLM) to serve as the default for
@@ -169,7 +195,9 @@ export function SetDefaultModelModal({
                 <td className="p-2">
                   System default{" "}
                   {defaultProvider?.default_model_name &&
-                    `(${getDisplayNameForModel(defaultProvider?.default_model_name)})`}
+                    `(${getDisplayNameForModel(
+                      defaultProvider?.default_model_name
+                    )})`}
                 </td>
               }
             </div>
@@ -203,6 +231,6 @@ export function SetDefaultModelModal({
           </div>
         </div>
       </>
-    </ModalWrapper>
+    </Modal>
   );
 }

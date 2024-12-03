@@ -1,5 +1,8 @@
+from typing import Any
+
 from danswer.configs.app_configs import DISABLE_GENERATIVE_AI
 from danswer.configs.chat_configs import QA_TIMEOUT
+from danswer.configs.model_configs import GEN_AI_MODEL_FALLBACK_MAX_TOKENS
 from danswer.configs.model_configs import GEN_AI_TEMPERATURE
 from danswer.db.engine import get_session_context_manager
 from danswer.db.llm import fetch_default_provider
@@ -7,9 +10,19 @@ from danswer.db.llm import fetch_provider
 from danswer.db.models import Persona
 from danswer.llm.chat_llm import DefaultMultiLLM
 from danswer.llm.exceptions import GenAIDisabledException
-from danswer.llm.headers import build_llm_extra_headers
 from danswer.llm.interfaces import LLM
 from danswer.llm.override_models import LLMOverride
+from danswer.utils.headers import build_llm_extra_headers
+from danswer.utils.long_term_log import LongTermLogger
+
+
+def _build_extra_model_kwargs(provider: str) -> dict[str, Any]:
+    """Ollama requires us to specify the max context window.
+
+    For now, just using the GEN_AI_MODEL_FALLBACK_MAX_TOKENS value.
+    TODO: allow model-specific values to be configured via the UI.
+    """
+    return {"num_ctx": GEN_AI_MODEL_FALLBACK_MAX_TOKENS} if provider == "ollama" else {}
 
 
 def get_main_llm_from_tuple(
@@ -22,6 +35,7 @@ def get_llms_for_persona(
     persona: Persona,
     llm_override: LLMOverride | None = None,
     additional_headers: dict[str, str] | None = None,
+    long_term_logger: LongTermLogger | None = None,
 ) -> tuple[LLM, LLM]:
     model_provider_override = llm_override.model_provider if llm_override else None
     model_version_override = llm_override.model_version if llm_override else None
@@ -32,6 +46,7 @@ def get_llms_for_persona(
         return get_default_llms(
             temperature=temperature_override or GEN_AI_TEMPERATURE,
             additional_headers=additional_headers,
+            long_term_logger=long_term_logger,
         )
 
     with get_session_context_manager() as db_session:
@@ -51,11 +66,13 @@ def get_llms_for_persona(
         return get_llm(
             provider=llm_provider.provider,
             model=model,
+            deployment_name=llm_provider.deployment_name,
             api_key=llm_provider.api_key,
             api_base=llm_provider.api_base,
             api_version=llm_provider.api_version,
             custom_config=llm_provider.custom_config,
             additional_headers=additional_headers,
+            long_term_logger=long_term_logger,
         )
 
     return _create_llm(model), _create_llm(fast_model)
@@ -65,6 +82,7 @@ def get_default_llms(
     timeout: int = QA_TIMEOUT,
     temperature: float = GEN_AI_TEMPERATURE,
     additional_headers: dict[str, str] | None = None,
+    long_term_logger: LongTermLogger | None = None,
 ) -> tuple[LLM, LLM]:
     if DISABLE_GENERATIVE_AI:
         raise GenAIDisabledException()
@@ -88,6 +106,7 @@ def get_default_llms(
         return get_llm(
             provider=llm_provider.provider,
             model=model,
+            deployment_name=llm_provider.deployment_name,
             api_key=llm_provider.api_key,
             api_base=llm_provider.api_base,
             api_version=llm_provider.api_version,
@@ -95,6 +114,7 @@ def get_default_llms(
             timeout=timeout,
             temperature=temperature,
             additional_headers=additional_headers,
+            long_term_logger=long_term_logger,
         )
 
     return _create_llm(model_name), _create_llm(fast_model_name)
@@ -103,6 +123,7 @@ def get_default_llms(
 def get_llm(
     provider: str,
     model: str,
+    deployment_name: str | None,
     api_key: str | None = None,
     api_base: str | None = None,
     api_version: str | None = None,
@@ -110,10 +131,12 @@ def get_llm(
     temperature: float = GEN_AI_TEMPERATURE,
     timeout: int = QA_TIMEOUT,
     additional_headers: dict[str, str] | None = None,
+    long_term_logger: LongTermLogger | None = None,
 ) -> LLM:
     return DefaultMultiLLM(
         model_provider=provider,
         model_name=model,
+        deployment_name=deployment_name,
         api_key=api_key,
         api_base=api_base,
         api_version=api_version,
@@ -121,4 +144,6 @@ def get_llm(
         temperature=temperature,
         custom_config=custom_config,
         extra_headers=build_llm_extra_headers(additional_headers),
+        model_kwargs=_build_extra_model_kwargs(provider),
+        long_term_logger=long_term_logger,
     )

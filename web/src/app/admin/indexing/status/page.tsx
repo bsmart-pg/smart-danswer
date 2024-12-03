@@ -5,17 +5,12 @@ import { NotebookIcon } from "@/components/icons/icons";
 import { CCPairIndexingStatusTable } from "./CCPairIndexingStatusTable";
 import { AdminPageTitle } from "@/components/admin/Title";
 import Link from "next/link";
-import { Button, Text } from "@tremor/react";
+import Text from "@/components/ui/text";
 import { useConnectorCredentialIndexingStatus } from "@/lib/hooks";
 import { usePopupFromQuery } from "@/components/popup/PopupFromQuery";
+import { Button } from "@/components/ui/button";
 
 function Main() {
-  const { popup } = usePopupFromQuery({
-    "connector-created": {
-      message: "Connector created successfully",
-      type: "success",
-    },
-  });
   const {
     data: indexAttemptData,
     isLoading: indexAttemptIsLoading,
@@ -70,30 +65,38 @@ function Main() {
   });
 
   return (
-    <>
-      {popup}
-      <CCPairIndexingStatusTable
-        ccPairsIndexingStatuses={indexAttemptData}
-        editableCcPairsIndexingStatuses={editableIndexAttemptData}
-      />
-    </>
+    <CCPairIndexingStatusTable
+      ccPairsIndexingStatuses={indexAttemptData}
+      editableCcPairsIndexingStatuses={editableIndexAttemptData}
+    />
   );
 }
 
 export default function Status() {
+  const { popup } = usePopupFromQuery({
+    "connector-created": {
+      message: "Connector created successfully",
+      type: "success",
+    },
+    "connector-deleted": {
+      message: "Connector deleted successfully",
+      type: "success",
+    },
+  });
+
   return (
     <div className="mx-auto container">
+      {popup}
       <AdminPageTitle
         icon={<NotebookIcon size={32} />}
         title="Existing Connectors"
         farRightElement={
           <Link href="/admin/add-connector">
-            <Button color="green" size="xs">
-              Add Connector
-            </Button>
+            <Button variant="success-reverse">Add Connector</Button>
           </Link>
         }
       />
+
       <Main />
     </div>
   );

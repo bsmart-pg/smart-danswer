@@ -6,7 +6,9 @@ import {
   FailedConnectorIndexingStatus,
   ValidStatuses,
 } from "@/lib/types";
-import { Button, Text, Title } from "@tremor/react";
+import Text from "@/components/ui/text";
+import Title from "@/components/ui/title";
+import { Button } from "@/components/ui/button";
 import { useMemo, useState } from "react";
 import useSWR, { mutate } from "swr";
 import { ReindexingProgressTable } from "../../../../components/embedding/ReindexingProgressTable";
@@ -27,11 +29,11 @@ export default function UpgradingPage({
   const [isCancelling, setIsCancelling] = useState<boolean>(false);
 
   const { setPopup, popup } = usePopup();
-  const { data: connectors } = useSWR<Connector<any>[]>(
-    "/api/manage/connector",
-    errorHandlingFetcher,
-    { refreshInterval: 5000 } // 5 seconds
-  );
+  const { data: connectors, isLoading: isLoadingConnectors } = useSWR<
+    Connector<any>[]
+  >("/api/manage/connector", errorHandlingFetcher, {
+    refreshInterval: 5000, // 5 seconds
+  });
 
   const {
     data: ongoingReIndexingStatus,
@@ -66,10 +68,11 @@ export default function UpgradingPage({
   const statusOrder: Record<ValidStatuses, number> = useMemo(
     () => ({
       failed: 0,
-      completed_with_errors: 1,
-      not_started: 2,
-      in_progress: 3,
-      success: 4,
+      canceled: 1,
+      completed_with_errors: 2,
+      not_started: 3,
+      in_progress: 4,
+      success: 5,
     }),
     []
   );
@@ -90,6 +93,10 @@ export default function UpgradingPage({
     });
   }, [ongoingReIndexingStatus]);
 
+  if (isLoadingConnectors || isLoadingOngoingReIndexingStatus) {
+    return <ThreeDotsLoader />;
+  }
+
   return (
     <>
       {popup}
@@ -107,7 +114,7 @@ export default function UpgradingPage({
               be lost.
             </div>
             <div className="flex">
-              <Button onClick={onCancel} className="mt-3 mx-auto" color="green">
+              <Button onClick={onCancel} variant="submit">
                 Confirm
               </Button>
             </div>
@@ -125,8 +132,7 @@ export default function UpgradingPage({
             </div>
 
             <Button
-              color="red"
-              size="xs"
+              variant="destructive"
               className="mt-4"
               onClick={() => setIsCancelling(true)}
             >
@@ -150,14 +156,12 @@ export default function UpgradingPage({
                   downtime is necessary during this transition.
                 </Text>
 
-                {isLoadingOngoingReIndexingStatus ? (
-                  <ThreeDotsLoader />
-                ) : sortedReindexingProgress ? (
+                {sortedReindexingProgress ? (
                   <ReindexingProgressTable
                     reindexingProgress={sortedReindexingProgress}
                   />
                 ) : (
-                  <ErrorCallout errorTitle="Failed to fetch re-indexing progress" />
+                  <ErrorCallout errorTitle="Failed to fetch reindexing progress" />
                 )}
               </>
             ) : (
@@ -167,7 +171,7 @@ export default function UpgradingPage({
                 </h3>
                 <p className="mb-4 text-text-800">
                   You&apos;re currently switching embedding models, but there
-                  are no connectors to re-index. This means the transition will
+                  are no connectors to reindex. This means the transition will
                   be quick and seamless!
                 </p>
                 <p className="text-text-600">

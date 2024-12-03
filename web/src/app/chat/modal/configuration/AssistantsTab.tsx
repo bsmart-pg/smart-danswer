@@ -16,25 +16,29 @@ import {
 import { Persona } from "@/app/admin/assistants/interfaces";
 import { LLMProviderDescriptor } from "@/app/admin/configuration/llm/interfaces";
 import { getFinalLLM } from "@/lib/llm/utils";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { updateUserAssistantList } from "@/lib/assistants/updateAssistantPreferences";
 import { DraggableAssistantCard } from "@/components/assistants/AssistantCards";
+import { useAssistants } from "@/components/context/AssistantsContext";
+import { useUser } from "@/components/user/UserProvider";
 
 export function AssistantsTab({
   selectedAssistant,
-  availableAssistants,
   llmProviders,
   onSelect,
-  refreshUser,
 }: {
   selectedAssistant: Persona;
-  availableAssistants: Persona[];
   llmProviders: LLMProviderDescriptor[];
   onSelect: (assistant: Persona) => void;
-  refreshUser: () => void;
 }) {
+  const { refreshUser } = useUser();
   const [_, llmName] = getFinalLLM(llmProviders, null, null);
-  const [assistants, setAssistants] = useState(availableAssistants);
+  const { finalAssistants, refreshAssistants } = useAssistants();
+  const [assistants, setAssistants] = useState(finalAssistants);
+
+  useEffect(() => {
+    setAssistants(finalAssistants);
+  }, [finalAssistants]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -57,7 +61,6 @@ export function AssistantsTab({
 
       setAssistants(updatedAssistants);
       await updateUserAssistantList(updatedAssistants.map((a) => a.id));
-      refreshUser();
     }
   }
 
@@ -73,7 +76,7 @@ export function AssistantsTab({
           items={assistants.map((a) => a.id.toString())}
           strategy={verticalListSortingStrategy}
         >
-          <div className="px-4 pb-2  max-h-[500px] include-scrollbar overflow-y-scroll my-3 grid grid-cols-1 gap-4">
+          <div className="px-4 pb-2  max-h-[500px] default-scrollbar overflow-y-scroll overflow-x-hidden my-3 grid grid-cols-1 gap-4">
             {assistants.map((assistant) => (
               <DraggableAssistantCard
                 key={assistant.id.toString()}

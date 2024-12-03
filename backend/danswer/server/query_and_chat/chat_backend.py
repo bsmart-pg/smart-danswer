@@ -1,8 +1,11 @@
 import asyncio
 import io
+import json
 import uuid
 from collections.abc import Callable
 from collections.abc import Generator
+from typing import Tuple
+from uuid import UUID
 
 from fastapi import APIRouter
 from fastapi import Depends
@@ -11,18 +14,24 @@ from fastapi import Request
 from fastapi import Response
 from fastapi import UploadFile
 from fastapi.responses import StreamingResponse
+from PIL import Image
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from danswer.auth.users import current_limited_user
 from danswer.auth.users import current_user
 from danswer.chat.chat_utils import create_chat_chain
+from danswer.chat.chat_utils import extract_headers
 from danswer.chat.process_message import stream_chat_message
 from danswer.configs.app_configs import WEB_DOMAIN
 from danswer.configs.constants import FileOrigin
 from danswer.configs.constants import MessageType
+from danswer.configs.model_configs import LITELLM_PASS_THROUGH_HEADERS
+from danswer.db.chat import add_chats_to_session_from_slack_thread
 from danswer.db.chat import create_chat_session
 from danswer.db.chat import create_new_chat_message
 from danswer.db.chat import delete_chat_session
+from danswer.db.chat import duplicate_chat_session_for_user_from_slack
 from danswer.db.chat import get_chat_message
 from danswer.db.chat import get_chat_messages_by_session
 from danswer.db.chat import get_chat_session_by_id
@@ -48,7 +57,6 @@ from danswer.llm.answering.prompts.citations_prompt import (
 from danswer.llm.exceptions import GenAIDisabledException
 from danswer.llm.factory import get_default_llms
 from danswer.llm.factory import get_llms_for_persona
-from danswer.llm.headers import get_litellm_additional_request_headers
 from danswer.natural_language_processing.utils import get_tokenizer
 from danswer.secondary_llm_flows.chat_session_naming import (
     get_renamed_conversation_name,
@@ -69,7 +77,9 @@ from danswer.server.query_and_chat.models import RenameChatSessionResponse
 from danswer.server.query_and_chat.models import SearchFeedbackRequest
 from danswer.server.query_and_chat.models import UpdateChatSessionThreadRequest
 from danswer.server.query_and_chat.token_limit import check_token_rate_limits
+from danswer.utils.headers import get_custom_tool_additional_request_headers
 from danswer.utils.logger import setup_logger
+
 
 logger = setup_logger()
 
@@ -126,7 +136,7 @@ def update_chat_session_model(
 
 @router.get("/get-chat-session/{session_id}")
 def get_chat_session(
-    session_id: int,
+    session_id: UUID,
     is_shared: bool = False,
     user: User | None = Depends(current_user),
     db_session: Session = Depends(get_session),
@@ -226,7 +236,9 @@ def rename_chat_session(
 
     try:
         llm, _ = get_default_llms(
-            additional_headers=get_litellm_additional_request_headers(request.headers)
+            additional_headers=extract_headers(
+                request.headers, LITELLM_PASS_THROUGH_HEADERS
+            )
         )
     except GenAIDisabledException:
         # This may be longer than what the LLM tends to produce but is the most
@@ -247,7 +259,7 @@ def rename_chat_session(
 
 @router.patch("/chat-session/{session_id}")
 def patch_chat_session(
-    session_id: int,
+    session_id: UUID,
     chat_session_update_req: ChatSessionUpdateRequest,
     user: User | None = Depends(current_user),
     db_session: Session = Depends(get_session),
@@ -264,7 +276,7 @@ def patch_chat_session(
 
 @router.delete("/delete-chat-session/{session_id}")
 def delete_chat_session_by_id(
-    session_id: int,
+    session_id: UUID,
     user: User | None = Depends(current_user),
     db_session: Session = Depends(get_session),
 ) -> None:
@@ -275,13 +287,14 @@ def delete_chat_session_by_id(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-async def is_disconnected(request: Request) -> Callable[[], bool]:
+async def is_connected(request: Request) -> Callable[[], bool]:
     main_loop = asyncio.get_event_loop()
 
-    def is_disconnected_sync() -> bool:
+    def is_connected_sync() -> bool:
         future = asyncio.run_coroutine_threadsafe(request.is_disconnected(), main_loop)
         try:
-            return not future.result(timeout=0.01)
+            is_connected = not future.result(timeout=0.01)
+            return is_connected
         except asyncio.TimeoutError:
             logger.error("Asyncio timed out")
             return True
@@ -292,24 +305,37 @@ async def is_disconnected(request: Request) -> Callable[[], bool]:
             )
             return True
 
-    return is_disconnected_sync
+    return is_connected_sync
 
 
 @router.post("/send-message")
 def handle_new_chat_message(
     chat_message_req: CreateChatMessageRequest,
     request: Request,
-    user: User | None = Depends(current_user),
+    user: User | None = Depends(current_limited_user),
     _: None = Depends(check_token_rate_limits),
-    is_disconnected_func: Callable[[], bool] = Depends(is_disconnected),
+    is_connected_func: Callable[[], bool] = Depends(is_connected),
 ) -> StreamingResponse:
-    """This endpoint is both used for all the following purposes:
+    """
+    This endpoint is both used for all the following purposes:
     - Sending a new message in the session
     - Regenerating a message in the session (just send the same one again)
     - Editing a message (similar to regenerating but sending a different message)
     - Kicking off a seeded chat session (set `use_existing_user_message`)
-    To avoid extra overhead/latency, this assumes (and checks) that previous messages on the path
-    have already been set as latest"""
+
+    Assumes that previous messages have been set as the latest to minimize overhead.
+
+    Args:
+        chat_message_req (CreateChatMessageRequest): Details about the new chat message.
+        request (Request): The current HTTP request context.
+        user (User | None): The current user, obtained via dependency injection.
+        _ (None): Rate limit check is run if user/group/global rate limits are enabled.
+        is_connected_func (Callable[[], bool]): Function to check client disconnection,
+            used to stop the streaming response if the client disconnects.
+
+    Returns:
+        StreamingResponse: Streams the response to the new chat message.
+    """
     logger.debug(f"Received new chat message: {chat_message_req.message}")
 
     if (
@@ -319,24 +345,27 @@ def handle_new_chat_message(
     ):
         raise HTTPException(status_code=400, detail="Empty chat message is invalid")
 
-    import json
-
     def stream_generator() -> Generator[str, None, None]:
         try:
             for packet in stream_chat_message(
                 new_msg_req=chat_message_req,
                 user=user,
-                use_existing_user_message=chat_message_req.use_existing_user_message,
-                litellm_additional_headers=get_litellm_additional_request_headers(
+                litellm_additional_headers=extract_headers(
+                    request.headers, LITELLM_PASS_THROUGH_HEADERS
+                ),
+                custom_tool_additional_headers=get_custom_tool_additional_request_headers(
                     request.headers
                 ),
-                is_connected=is_disconnected_func,
+                is_connected=is_connected_func,
             ):
                 yield json.dumps(packet) if isinstance(packet, dict) else packet
 
         except Exception as e:
-            logger.exception(f"Error in chat message streaming: {e}")
+            logger.exception("Error in chat message streaming")
             yield json.dumps({"error": str(e)})
+
+        finally:
+            logger.debug("Stream generator finished")
 
     return StreamingResponse(stream_generator(), media_type="text/event-stream")
 
@@ -365,7 +394,7 @@ def set_message_as_latest(
 @router.post("/create-chat-message-feedback")
 def create_chat_feedback(
     feedback: ChatFeedbackRequest,
-    user: User | None = Depends(current_user),
+    user: User | None = Depends(current_limited_user),
     db_session: Session = Depends(get_session),
 ) -> None:
     user_id = user.id if user else None
@@ -505,7 +534,54 @@ def seed_chat(
     )
 
 
+class SeedChatFromSlackRequest(BaseModel):
+    chat_session_id: UUID
+
+
+class SeedChatFromSlackResponse(BaseModel):
+    redirect_url: str
+
+
+@router.post("/seed-chat-session-from-slack")
+def seed_chat_from_slack(
+    chat_seed_request: SeedChatFromSlackRequest,
+    user: User | None = Depends(current_user),
+    db_session: Session = Depends(get_session),
+) -> SeedChatFromSlackResponse:
+    slack_chat_session_id = chat_seed_request.chat_session_id
+    new_chat_session = duplicate_chat_session_for_user_from_slack(
+        db_session=db_session,
+        user=user,
+        chat_session_id=slack_chat_session_id,
+    )
+
+    add_chats_to_session_from_slack_thread(
+        db_session=db_session,
+        slack_chat_session_id=slack_chat_session_id,
+        new_chat_session_id=new_chat_session.id,
+    )
+
+    return SeedChatFromSlackResponse(
+        redirect_url=f"{WEB_DOMAIN}/chat?chatId={new_chat_session.id}"
+    )
+
+
 """File upload"""
+
+
+def convert_to_jpeg(file: UploadFile) -> Tuple[io.BytesIO, str]:
+    try:
+        with Image.open(file.file) as img:
+            if img.mode != "RGB":
+                img = img.convert("RGB")
+            jpeg_io = io.BytesIO()
+            img.save(jpeg_io, format="JPEG", quality=85)
+            jpeg_io.seek(0)
+        return jpeg_io, "image/jpeg"
+    except Exception as e:
+        raise HTTPException(
+            status_code=400, detail=f"Failed to convert image: {str(e)}"
+        )
 
 
 @router.post("/file")
@@ -515,9 +591,9 @@ def upload_files_for_chat(
     _: User | None = Depends(current_user),
 ) -> dict[str, list[FileDescriptor]]:
     image_content_types = {"image/jpeg", "image/png", "image/webp"}
+    csv_content_types = {"text/csv"}
     text_content_types = {
         "text/plain",
-        "text/csv",
         "text/markdown",
         "text/x-markdown",
         "text/x-config",
@@ -536,8 +612,10 @@ def upload_files_for_chat(
         "application/epub+zip",
     }
 
-    allowed_content_types = image_content_types.union(text_content_types).union(
-        document_content_types
+    allowed_content_types = (
+        image_content_types.union(text_content_types)
+        .union(document_content_types)
+        .union(csv_content_types)
     )
 
     for file in files:
@@ -547,6 +625,10 @@ def upload_files_for_chat(
             elif file.content_type in text_content_types:
                 error_detail = "Unsupported text file type. Supported text types include .txt, .csv, .md, .mdx, .conf, "
                 ".log, .tsv."
+            elif file.content_type in csv_content_types:
+                error_detail = (
+                    "Unsupported CSV file type. Supported CSV types include .csv."
+                )
             else:
                 error_detail = (
                     "Unsupported document file type. Supported document types include .pdf, .docx, .pptx, .xlsx, "
@@ -570,19 +652,29 @@ def upload_files_for_chat(
     for file in files:
         if file.content_type in image_content_types:
             file_type = ChatFileType.IMAGE
+            # Convert image to JPEG
+            file_content, new_content_type = convert_to_jpeg(file)
+        elif file.content_type in csv_content_types:
+            file_type = ChatFileType.CSV
+            file_content = io.BytesIO(file.file.read())
+            new_content_type = file.content_type or ""
         elif file.content_type in document_content_types:
             file_type = ChatFileType.DOC
+            file_content = io.BytesIO(file.file.read())
+            new_content_type = file.content_type or ""
         else:
             file_type = ChatFileType.PLAIN_TEXT
+            file_content = io.BytesIO(file.file.read())
+            new_content_type = file.content_type or ""
 
-        # store the raw file
+        # store the file (now JPEG for images)
         file_id = str(uuid.uuid4())
         file_store.save_file(
             file_name=file_id,
-            content=file.file,
+            content=file_content,
             display_name=file.filename,
             file_origin=FileOrigin.CHAT_UPLOAD,
-            file_type=file.content_type or file_type.value,
+            file_type=new_content_type or file_type.value,
         )
 
         # if the file is a doc, extract text and store that so we don't need
@@ -615,14 +707,18 @@ def upload_files_for_chat(
     }
 
 
-@router.get("/file/{file_id}")
+@router.get("/file/{file_id:path}")
 def fetch_chat_file(
     file_id: str,
     db_session: Session = Depends(get_session),
     _: User | None = Depends(current_user),
 ) -> Response:
     file_store = get_default_file_store(db_session)
+    file_record = file_store.read_file_record(file_id)
+    if not file_record:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    media_type = file_record.file_type
     file_io = file_store.read_file(file_id, mode="b")
-    # NOTE: specifying "image/jpeg" here, but it still works for pngs
-    # TODO: do this properly
-    return Response(content=file_io.read(), media_type="image/jpeg")
+
+    return StreamingResponse(file_io, media_type=media_type)

@@ -3,16 +3,16 @@ import random
 import re
 import string
 import time
+import uuid
 from typing import Any
 from typing import cast
-from typing import Optional
 
 from retry import retry
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 from slack_sdk.models.blocks import Block
 from slack_sdk.models.metadata import Metadata
-from sqlalchemy.orm import Session
+from slack_sdk.socket_mode import SocketModeClient
 
 from danswer.configs.app_configs import DISABLE_TELEMETRY
 from danswer.configs.constants import ID_SEPARATOR
@@ -30,8 +30,7 @@ from danswer.configs.danswerbot_configs import (
 from danswer.connectors.slack.utils import make_slack_api_rate_limited
 from danswer.connectors.slack.utils import SlackTextCleaner
 from danswer.danswerbot.slack.constants import FeedbackVisibility
-from danswer.danswerbot.slack.tokens import fetch_tokens
-from danswer.db.engine import get_sqlalchemy_engine
+from danswer.db.engine import get_session_with_tenant
 from danswer.db.users import get_user_by_email
 from danswer.llm.exceptions import GenAIDisabledException
 from danswer.llm.factory import get_default_llms
@@ -47,16 +46,16 @@ from danswer.utils.text_processing import replace_whitespaces_w_space
 logger = setup_logger()
 
 
-_DANSWER_BOT_APP_ID: str | None = None
+_DANSWER_BOT_SLACK_BOT_ID: str | None = None
 _DANSWER_BOT_MESSAGE_COUNT: int = 0
 _DANSWER_BOT_COUNT_START_TIME: float = time.time()
 
 
-def get_danswer_bot_app_id(web_client: WebClient) -> Any:
-    global _DANSWER_BOT_APP_ID
-    if _DANSWER_BOT_APP_ID is None:
-        _DANSWER_BOT_APP_ID = web_client.auth_test().get("user_id")
-    return _DANSWER_BOT_APP_ID
+def get_danswer_bot_slack_bot_id(web_client: WebClient) -> Any:
+    global _DANSWER_BOT_SLACK_BOT_ID
+    if _DANSWER_BOT_SLACK_BOT_ID is None:
+        _DANSWER_BOT_SLACK_BOT_ID = web_client.auth_test().get("user_id")
+    return _DANSWER_BOT_SLACK_BOT_ID
 
 
 def check_message_limit() -> bool:
@@ -137,13 +136,8 @@ def update_emote_react(
 
 
 def remove_danswer_bot_tag(message_str: str, client: WebClient) -> str:
-    bot_tag_id = get_danswer_bot_app_id(web_client=client)
+    bot_tag_id = get_danswer_bot_slack_bot_id(web_client=client)
     return re.sub(rf"<@{bot_tag_id}>\s", "", message_str)
-
-
-def get_web_client() -> WebClient:
-    slack_tokens = fetch_tokens()
-    return WebClient(token=slack_tokens.bot_token)
 
 
 @retry(
@@ -220,6 +214,13 @@ def build_feedback_id(
         feedback_id = str(message_id)
 
     return unique_prefix + ID_SEPARATOR + feedback_id
+
+
+def build_continue_in_web_ui_id(
+    message_id: int,
+) -> str:
+    unique_prefix = str(uuid.uuid4())[:10]
+    return unique_prefix + ID_SEPARATOR + str(message_id)
 
 
 def decompose_action_id(feedback_id: str) -> tuple[int, str | None, int | None]:
@@ -319,7 +320,7 @@ def get_channel_name_from_id(
         raise e
 
 
-def fetch_user_ids_from_emails(
+def fetch_slack_user_ids_from_emails(
     user_emails: list[str], client: WebClient
 ) -> tuple[list[str], list[str]]:
     user_ids: list[str] = []
@@ -437,9 +438,9 @@ def read_slack_thread(
             )
             message_type = MessageType.USER
         else:
-            self_app_id = get_danswer_bot_app_id(client)
+            self_slack_bot_id = get_danswer_bot_slack_bot_id(client)
 
-            if reply.get("user") == self_app_id:
+            if reply.get("user") == self_slack_bot_id:
                 # DanswerBot response
                 message_type = MessageType.ASSISTANT
                 user_sem_id = "Assistant"
@@ -489,7 +490,9 @@ def read_slack_thread(
     return thread_messages
 
 
-def slack_usage_report(action: str, sender_id: str | None, client: WebClient) -> None:
+def slack_usage_report(
+    action: str, sender_id: str | None, client: WebClient, tenant_id: str | None
+) -> None:
     if DISABLE_TELEMETRY:
         return
 
@@ -501,7 +504,7 @@ def slack_usage_report(action: str, sender_id: str | None, client: WebClient) ->
         logger.warning("Unable to find sender email")
 
     if sender_email is not None:
-        with Session(get_sqlalchemy_engine()) as db_session:
+        with get_session_with_tenant(tenant_id) as db_session:
             danswer_user = get_user_by_email(email=sender_email, db_session=db_session)
 
     optional_telemetry(
@@ -526,7 +529,7 @@ class SlackRateLimiter:
             self.last_reset_time = time.time()
 
     def notify(
-        self, client: WebClient, channel: str, position: int, thread_ts: Optional[str]
+        self, client: WebClient, channel: str, position: int, thread_ts: str | None
     ) -> None:
         respond_in_thread(
             client=client,
@@ -577,3 +580,12 @@ def get_feedback_visibility() -> FeedbackVisibility:
         return FeedbackVisibility(DANSWER_BOT_FEEDBACK_VISIBILITY.lower())
     except ValueError:
         return FeedbackVisibility.PRIVATE
+
+
+class TenantSocketModeClient(SocketModeClient):
+    def __init__(
+        self, tenant_id: str | None, slack_bot_id: int, *args: Any, **kwargs: Any
+    ):
+        super().__init__(*args, **kwargs)
+        self.tenant_id = tenant_id
+        self.slack_bot_id = slack_bot_id

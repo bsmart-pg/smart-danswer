@@ -3,6 +3,7 @@ from datetime import timedelta
 from datetime import timezone
 
 from danswer.configs.constants import INDEX_SEPARATOR
+from danswer.context.search.models import IndexFilters
 from danswer.document_index.interfaces import VespaChunkRequest
 from danswer.document_index.vespa_constants import ACCESS_CONTROL_LIST
 from danswer.document_index.vespa_constants import CHUNK_ID
@@ -12,7 +13,7 @@ from danswer.document_index.vespa_constants import DOCUMENT_SETS
 from danswer.document_index.vespa_constants import HIDDEN
 from danswer.document_index.vespa_constants import METADATA_LIST
 from danswer.document_index.vespa_constants import SOURCE_TYPE
-from danswer.search.models import IndexFilters
+from danswer.document_index.vespa_constants import TENANT_ID
 from danswer.utils.logger import setup_logger
 
 logger = setup_logger()
@@ -52,6 +53,9 @@ def build_vespa_filters(filters: IndexFilters, include_hidden: bool = False) -> 
         return f"({DOC_UPDATED_AT} >= {cutoff_secs}) and "
 
     filter_str = f"!({HIDDEN}=true) and " if not include_hidden else ""
+
+    if filters.tenant_id:
+        filter_str += f'({TENANT_ID} contains "{filters.tenant_id}") and '
 
     # CAREFUL touching this one, currently there is no second ACL double-check post retrieval
     if filters.access_control_list is not None:

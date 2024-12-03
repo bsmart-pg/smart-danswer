@@ -5,11 +5,12 @@ import {
   Table,
   TableHead,
   TableRow,
-  TableHeaderCell,
   TableBody,
   TableCell,
-  Text,
-} from "@tremor/react";
+  TableHeader,
+} from "@/components/ui/table";
+import Text from "@/components/ui/text";
+import { Callout } from "@/components/ui/callout";
 import { CCPairFullInfo, PaginatedIndexAttempts } from "./types";
 import { IndexAttemptStatus } from "@/components/Status";
 import { PageSelector } from "@/components/PageSelector";
@@ -22,7 +23,13 @@ import { InfoIcon, SearchIcon } from "@/components/icons/icons";
 import Link from "next/link";
 import ExceptionTraceModal from "@/components/modals/ExceptionTraceModal";
 import { useRouter } from "next/navigation";
-import { Tooltip } from "@/components/tooltip/Tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { FiInfo } from "react-icons/fi";
 
 // This is the number of index attempts to display per page
 const NUM_IN_PAGE = 8;
@@ -61,7 +68,9 @@ export function IndexingAttemptsTable({ ccPair }: { ccPair: CCPairFullInfo }) {
 
   const batchRetrievalUrlBuilder = useCallback(
     (batchNum: number) => {
-      return `${buildCCPairInfoUrl(ccPair.id)}/index-attempts?page=${batchNum}&page_size=${BATCH_SIZE * NUM_IN_PAGE}`;
+      return `${buildCCPairInfoUrl(
+        ccPair.id
+      )}/index-attempts?page=${batchNum}&page_size=${BATCH_SIZE * NUM_IN_PAGE}`;
     },
     [ccPair.id]
   );
@@ -124,9 +133,9 @@ export function IndexingAttemptsTable({ ccPair }: { ccPair: CCPairFullInfo }) {
       setIsCurrentPageLoading(false);
     }
 
-    const nextBatchNum = Math.min(
-      batchNum + 1,
-      Math.ceil(totalPages / BATCH_SIZE) - 1
+    const nextBatchNum = Math.max(
+      Math.min(batchNum + 1, Math.ceil(totalPages / BATCH_SIZE) - 1),
+      0
     );
     if (!cachedBatches[nextBatchNum]) {
       fetchBatchData(nextBatchNum);
@@ -141,7 +150,7 @@ export function IndexingAttemptsTable({ ccPair }: { ccPair: CCPairFullInfo }) {
     if (!cachedBatches[0]) {
       fetchBatchData(0);
     }
-  }, [ccPair.id, page, cachedBatches, totalPages]);
+  }, [ccPair.id, page, cachedBatches, totalPages, fetchBatchData]);
 
   // This updates the data on the current page
   useEffect(() => {
@@ -156,10 +165,19 @@ export function IndexingAttemptsTable({ ccPair }: { ccPair: CCPairFullInfo }) {
     }
   }, [page, cachedBatches]);
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const batchNum = Math.floor((page - 1) / BATCH_SIZE);
+      fetchBatchData(batchNum); // Re-fetch the current batch data
+    }, 5000); // Refresh every 5 seconds
+
+    return () => clearInterval(interval); // Cleanup on unmount
+  }, [page, fetchBatchData]); // Dependencies to ensure correct batch is fetched
+
   // This updates the page number and manages the URL
   const updatePage = (newPage: number) => {
     setPage(newPage);
-    router.push(`/admin/connector/${ccPair.id}?page=${newPage}`, {
+    router.replace(`/admin/connector/${ccPair.id}?page=${newPage}`, {
       scroll: false,
     });
     window.scrollTo({
@@ -182,6 +200,25 @@ export function IndexingAttemptsTable({ ccPair }: { ccPair: CCPairFullInfo }) {
     );
   }
 
+  // if no indexing attempts have been scheduled yet, let the user know why
+  if (
+    Object.keys(cachedBatches).length === 0 ||
+    Object.values(cachedBatches).every((batch) =>
+      batch.every((page) => page.index_attempts.length === 0)
+    )
+  ) {
+    return (
+      <Callout
+        className="mt-4"
+        title="No indexing attempts scheduled yet"
+        type="notice"
+      >
+        Index attempts are scheduled in the background, and may take some time
+        to appear. Try refreshing the page in ~30 seconds!
+      </Callout>
+    );
+  }
+
   // This is the index attempt that the user wants to view the trace for
   const indexAttemptToDisplayTraceFor = currentPageData?.index_attempts?.find(
     (indexAttempt) => indexAttempt.id === indexAttemptTracePopupId
@@ -198,27 +235,32 @@ export function IndexingAttemptsTable({ ccPair }: { ccPair: CCPairFullInfo }) {
         )}
 
       <Table>
-        <TableHead>
+        <TableHeader>
           <TableRow>
-            <TableHeaderCell>Time Started</TableHeaderCell>
-            <TableHeaderCell>Status</TableHeaderCell>
-            <TableHeaderCell>New Doc Cnt</TableHeaderCell>
-            <TableHeaderCell>
+            <TableHead>Time Started</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>New Doc Cnt</TableHead>
+            <TableHead>
               <div className="w-fit">
-                <Tooltip
-                  width="max-w-sm"
-                  content="Total number of documents replaced in the index during this indexing attempt"
-                >
-                  <span className="cursor-help flex items-center">
-                    Total Doc Cnt
-                    <InfoIcon className="ml-1 w-4 h-4" />
-                  </span>
-                </Tooltip>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="cursor-help flex items-center">
+                        Total Doc Cnt
+                        <InfoIcon className="ml-1 w-4 h-4" />
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      Total number of documents replaced in the index during
+                      this indexing attempt
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </div>
-            </TableHeaderCell>
-            <TableHeaderCell>Error Message</TableHeaderCell>
+            </TableHead>
+            <TableHead>Error Message</TableHead>
           </TableRow>
-        </TableHead>
+        </TableHeader>
         <TableBody>
           {currentPageData.index_attempts.map((indexAttempt) => {
             const docsPerMinute =
@@ -233,7 +275,6 @@ export function IndexingAttemptsTable({ ccPair }: { ccPair: CCPairFullInfo }) {
                 <TableCell>
                   <IndexAttemptStatus
                     status={indexAttempt.status || "not_started"}
-                    size="xs"
                   />
                   {docsPerMinute ? (
                     <div className="text-xs mt-1">
@@ -281,7 +322,8 @@ export function IndexingAttemptsTable({ ccPair }: { ccPair: CCPairFullInfo }) {
                       </Text>
                     )}
 
-                    {indexAttempt.status === "failed" &&
+                    {(indexAttempt.status === "failed" ||
+                      indexAttempt.status === "canceled") &&
                       indexAttempt.error_msg && (
                         <Text className="flex flex-wrap whitespace-normal">
                           {indexAttempt.error_msg}

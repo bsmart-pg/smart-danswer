@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { User, UserRole } from "@/lib/types";
 import { getCurrentUser } from "@/lib/user";
+import { usePostHog } from "posthog-js/react";
 
 interface UserContextType {
   user: User | null;
@@ -10,34 +11,81 @@ interface UserContextType {
   isAdmin: boolean;
   isCurator: boolean;
   refreshUser: () => Promise<void>;
+  isCloudSuperuser: boolean;
+  updateUserAutoScroll: (autoScroll: boolean | null) => Promise<void>;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
-export function UserProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoadingUser, setIsLoadingUser] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [isCurator, setIsCurator] = useState(false);
+export function UserProvider({
+  children,
+  user,
+}: {
+  children: React.ReactNode;
+  user: User | null;
+}) {
+  const [upToDateUser, setUpToDateUser] = useState<User | null>(user);
+  const [isLoadingUser, setIsLoadingUser] = useState(false);
+
+  const posthog = usePostHog();
+
+  useEffect(() => {
+    if (!posthog) return;
+
+    if (user?.id) {
+      const identifyData: Record<string, any> = {
+        email: user.email,
+      };
+      if (user.organization_name) {
+        identifyData.organization_name = user.organization_name;
+      }
+      posthog.identify(user.id, identifyData);
+    } else {
+      posthog.reset();
+    }
+  }, [posthog, user]);
 
   const fetchUser = async () => {
     try {
-      const user = await getCurrentUser();
-      setUser(user);
-      setIsAdmin(user?.role === UserRole.ADMIN);
-      setIsCurator(
-        user?.role === UserRole.CURATOR || user?.role == UserRole.GLOBAL_CURATOR
-      );
+      setIsLoadingUser(true);
+      const currentUser = await getCurrentUser();
+      setUpToDateUser(currentUser);
     } catch (error) {
       console.error("Error fetching current user:", error);
     } finally {
       setIsLoadingUser(false);
     }
   };
+  const updateUserAutoScroll = async (autoScroll: boolean | null) => {
+    try {
+      const response = await fetch("/api/auto-scroll", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ auto_scroll: autoScroll }),
+      });
+      setUpToDateUser((prevUser) => {
+        if (prevUser) {
+          return {
+            ...prevUser,
+            preferences: {
+              ...prevUser.preferences,
+              auto_scroll: autoScroll,
+            },
+          };
+        }
+        return prevUser;
+      });
 
-  useEffect(() => {
-    fetchUser();
-  }, []);
+      if (!response.ok) {
+        throw new Error("Failed to update auto-scroll setting");
+      }
+    } catch (error) {
+      console.error("Error updating auto-scroll setting:", error);
+      throw error;
+    }
+  };
 
   const refreshUser = async () => {
     await fetchUser();
@@ -45,7 +93,18 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <UserContext.Provider
-      value={{ user, isLoadingUser, isAdmin, refreshUser, isCurator }}
+      value={{
+        user: upToDateUser,
+        isLoadingUser,
+        refreshUser,
+        updateUserAutoScroll,
+        isAdmin: upToDateUser?.role === UserRole.ADMIN,
+        // Curator status applies for either global or basic curator
+        isCurator:
+          upToDateUser?.role === UserRole.CURATOR ||
+          upToDateUser?.role === UserRole.GLOBAL_CURATOR,
+        isCloudSuperuser: upToDateUser?.is_cloud_superuser ?? false,
+      }}
     >
       {children}
     </UserContext.Provider>

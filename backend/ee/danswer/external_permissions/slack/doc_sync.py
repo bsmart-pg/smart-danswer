@@ -1,77 +1,45 @@
 from slack_sdk import WebClient
-from sqlalchemy.orm import Session
 
+from danswer.access.models import DocExternalAccess
 from danswer.access.models import ExternalAccess
-from danswer.connectors.factory import instantiate_connector
-from danswer.connectors.interfaces import IdConnector
-from danswer.connectors.models import InputType
 from danswer.connectors.slack.connector import get_channels
 from danswer.connectors.slack.connector import make_paginated_slack_api_call_w_retries
+from danswer.connectors.slack.connector import SlackPollConnector
 from danswer.db.models import ConnectorCredentialPair
-from danswer.db.users import batch_add_non_web_user_if_not_exists__no_commit
 from danswer.utils.logger import setup_logger
-from ee.danswer.db.document import upsert_document_external_perms__no_commit
 from ee.danswer.external_permissions.slack.utils import fetch_user_id_to_email_map
 
 
 logger = setup_logger()
 
 
-def _extract_channel_id_from_doc_id(doc_id: str) -> str:
-    """
-    Extracts the channel ID from a document ID string.
-
-    The document ID is expected to be in the format: "{channel_id}__{message_ts}"
-
-    Args:
-        doc_id (str): The document ID string.
-
-    Returns:
-        str: The extracted channel ID.
-
-    Raises:
-        ValueError: If the doc_id doesn't contain the expected separator.
-    """
-    try:
-        channel_id, _ = doc_id.split("__", 1)
-        return channel_id
-    except ValueError:
-        raise ValueError(f"Invalid doc_id format: {doc_id}")
-
-
 def _get_slack_document_ids_and_channels(
-    db_session: Session,
     cc_pair: ConnectorCredentialPair,
 ) -> dict[str, list[str]]:
-    # Get all document ids that need their permissions updated
-    runnable_connector = instantiate_connector(
-        db_session=db_session,
-        source=cc_pair.connector.source,
-        input_type=InputType.PRUNE,
-        connector_specific_config=cc_pair.connector.connector_specific_config,
-        credential=cc_pair.credential,
-    )
+    slack_connector = SlackPollConnector(**cc_pair.connector.connector_specific_config)
+    slack_connector.load_credentials(cc_pair.credential.credential_json)
 
-    assert isinstance(runnable_connector, IdConnector)
+    slim_doc_generator = slack_connector.retrieve_all_slim_documents()
 
     channel_doc_map: dict[str, list[str]] = {}
-    for doc_id in runnable_connector.retrieve_all_source_ids():
-        channel_id = _extract_channel_id_from_doc_id(doc_id)
-        if channel_id not in channel_doc_map:
-            channel_doc_map[channel_id] = []
-        channel_doc_map[channel_id].append(doc_id)
+    for doc_metadata_batch in slim_doc_generator:
+        for doc_metadata in doc_metadata_batch:
+            if doc_metadata.perm_sync_data is None:
+                continue
+            channel_id = doc_metadata.perm_sync_data["channel_id"]
+            if channel_id not in channel_doc_map:
+                channel_doc_map[channel_id] = []
+            channel_doc_map[channel_id].append(doc_metadata.id)
 
     return channel_doc_map
 
 
-def _fetch_worspace_permissions(
-    db_session: Session,
+def _fetch_workspace_permissions(
     user_id_to_email_map: dict[str, str],
 ) -> ExternalAccess:
     user_emails = set()
     for email in user_id_to_email_map.values():
         user_emails.add(email)
-    batch_add_non_web_user_if_not_exists__no_commit(db_session, list(user_emails))
     return ExternalAccess(
         external_user_emails=user_emails,
         # No group<->document mapping for slack
@@ -82,7 +50,6 @@ def _fetch_worspace_permissions(
 
 
 def _fetch_channel_permissions(
-    db_session: Session,
     slack_client: WebClient,
     workspace_permissions: ExternalAccess,
     user_id_to_email_map: dict[str, str],
@@ -132,9 +99,6 @@ def _fetch_channel_permissions(
                     # If no email is found, we skip the user
                     continue
                 user_id_to_email_map[member_id] = member_email
-                batch_add_non_web_user_if_not_exists__no_commit(
-                    db_session, [member_email]
-                )
 
             member_emails.add(member_email)
 
@@ -150,9 +114,8 @@ def _fetch_channel_permissions(
 
 
 def slack_doc_sync(
-    db_session: Session,
     cc_pair: ConnectorCredentialPair,
-) -> None:
+) -> list[DocExternalAccess]:
     """
     Adds the external permissions to the documents in postgres
     if the document doesn't already exists in postgres, we create
@@ -164,19 +127,18 @@ def slack_doc_sync(
     )
     user_id_to_email_map = fetch_user_id_to_email_map(slack_client)
     channel_doc_map = _get_slack_document_ids_and_channels(
-        db_session=db_session,
         cc_pair=cc_pair,
     )
-    workspace_permissions = _fetch_worspace_permissions(
-        db_session=db_session,
+    workspace_permissions = _fetch_workspace_permissions(
         user_id_to_email_map=user_id_to_email_map,
     )
     channel_permissions = _fetch_channel_permissions(
-        db_session=db_session,
         slack_client=slack_client,
         workspace_permissions=workspace_permissions,
         user_id_to_email_map=user_id_to_email_map,
     )
+
+    document_external_accesses = []
     for channel_id, ext_access in channel_permissions.items():
         doc_ids = channel_doc_map.get(channel_id)
         if not doc_ids:
@@ -184,9 +146,10 @@ def slack_doc_sync(
             continue
 
         for doc_id in doc_ids:
-            upsert_document_external_perms__no_commit(
-                db_session=db_session,
-                doc_id=doc_id,
-                external_access=ext_access,
-                source_type=cc_pair.connector.source,
+            document_external_accesses.append(
+                DocExternalAccess(
+                    external_access=ext_access,
+                    doc_id=doc_id,
+                )
             )
+    return document_external_accesses

@@ -1,29 +1,34 @@
-import { useQueryHistory } from "../lib";
-
+import { useQueryHistory, useTimeRange } from "../lib";
+import { Separator } from "@/components/ui/separator";
 import {
-  Card,
   Table,
   TableHead,
   TableRow,
-  TableHeaderCell,
   TableBody,
   TableCell,
-  Text,
-  Divider,
+  TableHeader,
+} from "@/components/ui/table";
+import Text from "@/components/ui/text";
+
+import {
   Select,
   SelectItem,
-} from "@tremor/react";
+  SelectValue,
+  SelectTrigger,
+  SelectContent,
+} from "@/components/ui/select";
 import { ThreeDotsLoader } from "@/components/Loading";
 import { ChatSessionMinimal } from "../usage/types";
 import { timestampToReadableDate } from "@/lib/dateUtils";
 import { FiFrown, FiMinus, FiSmile } from "react-icons/fi";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Feedback } from "@/lib/types";
-import { DateRangeSelector } from "../DateRangeSelector";
+import { DateRange, DateRangeSelector } from "../DateRangeSelector";
 import { PageSelector } from "@/components/PageSelector";
 import Link from "next/link";
 import { FeedbackBadge } from "./FeedbackBadge";
 import { DownloadAsCSV } from "./DownloadAsCSV";
+import CardSection from "@/components/admin/CardSection";
 
 const NUM_IN_PAGE = 20;
 
@@ -51,7 +56,7 @@ function QueryHistoryTableRow({
         <FeedbackBadge feedback={chatSessionMinimal.feedback_type} />
       </TableCell>
       <TableCell>{chatSessionMinimal.user_email || "-"}</TableCell>
-      <TableCell>{chatSessionMinimal.persona_name || "Unknown"}</TableCell>
+      <TableCell>{chatSessionMinimal.assistant_name || "Unknown"}</TableCell>
       <TableCell>
         {timestampToReadableDate(chatSessionMinimal.time_created)}
       </TableCell>
@@ -80,17 +85,30 @@ function SelectFeedbackType({
         <Select
           value={value}
           onValueChange={onValueChange as (value: string) => void}
-          enableClear={false}
         >
-          <SelectItem value="all" icon={FiMinus}>
-            Any
-          </SelectItem>
-          <SelectItem value="like" icon={FiSmile}>
-            Like
-          </SelectItem>
-          <SelectItem value="dislike" icon={FiFrown}>
-            Dislike
-          </SelectItem>
+          <SelectTrigger>
+            <SelectValue placeholder="Select feedback type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">
+              <div className="flex items-center gap-2">
+                <FiMinus className="h-4 w-4" />
+                <span>Any</span>
+              </div>
+            </SelectItem>
+            <SelectItem value="like">
+              <div className="flex items-center gap-2">
+                <FiSmile className="h-4 w-4" />
+                <span>Like</span>
+              </div>
+            </SelectItem>
+            <SelectItem value="dislike">
+              <div className="flex items-center gap-2">
+                <FiFrown className="h-4 w-4" />
+                <span>Dislike</span>
+              </div>
+            </SelectItem>
+          </SelectContent>
         </Select>
       </div>
     </div>
@@ -98,49 +116,65 @@ function SelectFeedbackType({
 }
 
 export function QueryHistoryTable() {
-  const {
-    data: chatSessionData,
-    selectedFeedbackType,
-    setSelectedFeedbackType,
+  const [selectedFeedbackType, setSelectedFeedbackType] = useState<
+    Feedback | "all"
+  >("all");
+  const [timeRange, setTimeRange] = useTimeRange();
+
+  const { data: chatSessionData } = useQueryHistory({
+    selectedFeedbackType:
+      selectedFeedbackType === "all" ? null : selectedFeedbackType,
     timeRange,
-    setTimeRange,
-  } = useQueryHistory();
+  });
 
   const [page, setPage] = useState(1);
 
+  const onTimeRangeChange = useCallback(
+    (value: DateRange) => {
+      if (value) {
+        setTimeRange((prevTimeRange) => ({
+          ...prevTimeRange,
+          from: new Date(value.from),
+          to: new Date(value.to),
+        }));
+      }
+    },
+    [setTimeRange]
+  );
+
   return (
-    <Card className="mt-8">
-      {chatSessionData ? (
-        <>
-          <div className="flex">
-            <div className="gap-y-3 flex flex-col">
-              <SelectFeedbackType
-                value={selectedFeedbackType || "all"}
-                onValueChange={setSelectedFeedbackType}
-              />
+    <CardSection className="mt-8">
+      <>
+        <div className="flex">
+          <div className="gap-y-3 flex flex-col">
+            <SelectFeedbackType
+              value={selectedFeedbackType || "all"}
+              onValueChange={setSelectedFeedbackType}
+            />
 
-              <DateRangeSelector
-                value={timeRange}
-                onValueChange={setTimeRange}
-              />
-            </div>
-
-            <DownloadAsCSV />
+            <DateRangeSelector
+              value={timeRange}
+              onValueChange={onTimeRangeChange}
+            />
           </div>
-          <Divider />
-          <Table className="mt-5">
-            <TableHead>
-              <TableRow>
-                <TableHeaderCell>First User Message</TableHeaderCell>
-                <TableHeaderCell>First AI Response</TableHeaderCell>
-                <TableHeaderCell>Feedback</TableHeaderCell>
-                <TableHeaderCell>User</TableHeaderCell>
-                <TableHeaderCell>Persona</TableHeaderCell>
-                <TableHeaderCell>Date</TableHeaderCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {chatSessionData
+
+          <DownloadAsCSV />
+        </div>
+        <Separator />
+        <Table className="mt-5">
+          <TableHeader>
+            <TableRow>
+              <TableHead>First User Message</TableHead>
+              <TableHead>First AI Response</TableHead>
+              <TableHead>Feedback</TableHead>
+              <TableHead>User</TableHead>
+              <TableHead>Persona</TableHead>
+              <TableHead>Date</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {chatSessionData &&
+              chatSessionData
                 .slice(NUM_IN_PAGE * (page - 1), NUM_IN_PAGE * page)
                 .map((chatSessionMinimal) => (
                   <QueryHistoryTableRow
@@ -148,9 +182,10 @@ export function QueryHistoryTable() {
                     chatSessionMinimal={chatSessionMinimal}
                   />
                 ))}
-            </TableBody>
-          </Table>
+          </TableBody>
+        </Table>
 
+        {chatSessionData && (
           <div className="mt-3 flex">
             <div className="mx-auto">
               <PageSelector
@@ -167,12 +202,8 @@ export function QueryHistoryTable() {
               />
             </div>
           </div>
-        </>
-      ) : (
-        <div className="h-80 flex flex-col">
-          <ThreeDotsLoader />
-        </div>
-      )}
-    </Card>
+        )}
+      </>
+    </CardSection>
   );
 }

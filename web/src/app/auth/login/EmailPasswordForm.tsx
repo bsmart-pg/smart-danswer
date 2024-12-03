@@ -3,9 +3,8 @@
 import { TextFormField } from "@/components/admin/connectors/Field";
 import { usePopup } from "@/components/admin/connectors/Popup";
 import { basicLogin, basicSignup } from "@/lib/user";
-import { Button } from "@tremor/react";
+import { Button } from "@/components/ui/button";
 import { Form, Formik } from "formik";
-import { useRouter } from "next/navigation";
 import * as Yup from "yup";
 import { requestEmailVerification } from "../lib";
 import { useState } from "react";
@@ -14,14 +13,16 @@ import { Spinner } from "@/components/Spinner";
 export function EmailPasswordForm({
   isSignup = false,
   shouldVerify,
+  referralSource,
+  nextUrl,
 }: {
   isSignup?: boolean;
   shouldVerify?: boolean;
+  referralSource?: string;
+  nextUrl?: string | null;
 }) {
-  const router = useRouter();
   const { popup, setPopup } = usePopup();
   const [isWorking, setIsWorking] = useState(false);
-
   return (
     <>
       {isWorking && <Spinner />}
@@ -39,7 +40,11 @@ export function EmailPasswordForm({
           if (isSignup) {
             // login is fast, no need to show a spinner
             setIsWorking(true);
-            const response = await basicSignup(values.email, values.password);
+            const response = await basicSignup(
+              values.email,
+              values.password,
+              referralSource
+            );
 
             if (!response.ok) {
               const errorDetail = (await response.json()).detail;
@@ -61,9 +66,13 @@ export function EmailPasswordForm({
           if (loginResponse.ok) {
             if (isSignup && shouldVerify) {
               await requestEmailVerification(values.email);
-              router.push("/auth/waiting-on-verification");
+              // Use window.location.href to force a full page reload,
+              // ensuring app re-initializes with the new state (including
+              // server-side provider values)
+              window.location.href = "/auth/waiting-on-verification";
             } else {
-              router.push("/");
+              // See above comment
+              window.location.href = nextUrl ? encodeURI(nextUrl) : "/";
             }
           } else {
             setIsWorking(false);

@@ -1,14 +1,16 @@
 import re
 from typing import cast
+from uuid import UUID
 
+from fastapi.datastructures import Headers
 from sqlalchemy.orm import Session
 
 from danswer.chat.models import CitationInfo
 from danswer.chat.models import LlmDoc
+from danswer.context.search.models import InferenceSection
 from danswer.db.chat import get_chat_messages_by_session
 from danswer.db.models import ChatMessage
 from danswer.llm.answering.models import PreviousMessage
-from danswer.search.models import InferenceSection
 from danswer.utils.logger import setup_logger
 
 logger = setup_logger()
@@ -29,11 +31,12 @@ def llm_doc_from_inference_section(inference_section: InferenceSection) -> LlmDo
         if inference_section.center_chunk.source_links
         else None,
         source_links=inference_section.center_chunk.source_links,
+        match_highlights=inference_section.center_chunk.match_highlights,
     )
 
 
 def create_chat_chain(
-    chat_session_id: int,
+    chat_session_id: UUID,
     db_session: Session,
     prefetch_tool_calls: bool = True,
     # Optional id at which we finish processing
@@ -166,3 +169,31 @@ def reorganize_citations(
             new_citation_info[citation.citation_num] = citation
 
     return new_answer, list(new_citation_info.values())
+
+
+def extract_headers(
+    headers: dict[str, str] | Headers, pass_through_headers: list[str] | None
+) -> dict[str, str]:
+    """
+    Extract headers specified in pass_through_headers from input headers.
+    Handles both dict and FastAPI Headers objects, accounting for lowercase keys.
+
+    Args:
+        headers: Input headers as dict or Headers object.
+
+    Returns:
+        dict: Filtered headers based on pass_through_headers.
+    """
+    if not pass_through_headers:
+        return {}
+
+    extracted_headers: dict[str, str] = {}
+    for key in pass_through_headers:
+        if key in headers:
+            extracted_headers[key] = headers[key]
+        else:
+            # fastapi makes all header keys lowercase, handling that here
+            lowercase_key = key.lower()
+            if lowercase_key in headers:
+                extracted_headers[lowercase_key] = headers[lowercase_key]
+    return extracted_headers

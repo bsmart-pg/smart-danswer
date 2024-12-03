@@ -23,7 +23,7 @@ export function PagesTab({
 }: {
   page: pageType;
   existingChats?: ChatSession[];
-  currentChatId?: number;
+  currentChatId?: string;
   folders?: Folder[];
   openedFolders?: { [key: number]: boolean };
   closeSidebar?: () => void;
@@ -44,10 +44,7 @@ export function PagesTab({
   ) => {
     event.preventDefault();
     setIsDragOver(false); // Reset drag over state on drop
-    const chatSessionId = parseInt(
-      event.dataTransfer.getData(CHAT_SESSION_ID_KEY),
-      10
-    );
+    const chatSessionId = event.dataTransfer.getData(CHAT_SESSION_ID_KEY);
     const folderId = event.dataTransfer.getData(FOLDER_ID_KEY);
 
     if (folderId) {
@@ -77,6 +74,8 @@ export function PagesTab({
             folders={folders}
             currentChatId={currentChatId}
             openedFolders={openedFolders}
+            showShareModal={showShareModal}
+            showDeleteModal={showDeleteModal}
           />
         </div>
       )}

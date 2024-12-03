@@ -7,7 +7,7 @@ from danswer.chat.models import DanswerAnswerPiece
 from danswer.chat.models import LlmDoc
 from danswer.configs.constants import DocumentSource
 from danswer.llm.answering.stream_processing.citation_processing import (
-    extract_citations_from_stream,
+    CitationProcessor,
 )
 from danswer.llm.answering.stream_processing.utils import DocumentIdOrderMapping
 
@@ -46,6 +46,7 @@ mock_docs = [
         updated_at=datetime.now(),
         link=f"https://{int(id/2)}.com" if int(id / 2) % 2 == 0 else None,
         source_links={0: "https://mintlify.com/docs/settings/broken-links"},
+        match_highlights=[],
     )
     for id in range(10)
 ]
@@ -70,14 +71,16 @@ def process_text(
 ) -> tuple[str, list[CitationInfo]]:
     mock_docs, mock_doc_id_to_rank_map = mock_data
     mapping = DocumentIdOrderMapping(order_mapping=mock_doc_id_to_rank_map)
-    result = list(
-        extract_citations_from_stream(
-            tokens=iter(tokens),
-            context_docs=mock_docs,
-            doc_id_to_rank_map=mapping,
-            stop_stream=None,
-        )
+    processor = CitationProcessor(
+        context_docs=mock_docs,
+        doc_id_to_rank_map=mapping,
+        stop_stream=None,
     )
+    result: list[DanswerAnswerPiece | CitationInfo] = []
+    for token in tokens:
+        result.extend(processor.process_token(token))
+    result.extend(processor.process_token(None))
+
     final_answer_text = ""
     citations = []
     for piece in result:
@@ -371,6 +374,27 @@ def process_text(
             "```\n"
             "The code demonstrates variable assignment.",
             [],
+        ),
+        (
+            "Citation as a single token",
+            [
+                "Here is some text",
+                "[1]",
+                ".",
+                " Some other text",
+            ],
+            "Here is some text[[1]](https://0.com). Some other text",
+            ["doc_0"],
+        ),
+        # ['To', ' set', ' up', ' D', 'answer', ',', ' if', ' you', ' are', ' running', ' it', ' yourself', ' and',
+        # ' need', ' access', ' to', ' certain', ' features', ' like', ' auto', '-sync', 'ing', ' document',
+        # '-level', ' access', ' permissions', ',', ' you', ' should', ' reach', ' out', ' to', ' the', ' D',
+        # 'answer', ' team', ' to', ' receive', ' access', ' [[', '4', ']].', '']
+        (
+            "Unique tokens with double brackets and a single token that ends the citation and has characters after it.",
+            ["... to receive access", " [[", "1", "]].", ""],
+            "... to receive access [[1]](https://0.com).",
+            ["doc_0"],
         ),
     ],
 )

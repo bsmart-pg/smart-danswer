@@ -6,11 +6,11 @@ from typing import Any
 from pydantic import BaseModel
 
 from danswer.configs.constants import DocumentSource
-from danswer.search.enums import QueryFlow
-from danswer.search.enums import SearchType
-from danswer.search.models import RetrievalDocs
-from danswer.search.models import SearchResponse
-from danswer.tools.custom.base_tool_types import ToolResultType
+from danswer.context.search.enums import QueryFlow
+from danswer.context.search.enums import SearchType
+from danswer.context.search.models import RetrievalDocs
+from danswer.context.search.models import SearchResponse
+from danswer.tools.tool_implementations.custom.base_tool_types import ToolResultType
 
 
 class LlmDoc(BaseModel):
@@ -25,6 +25,7 @@ class LlmDoc(BaseModel):
     updated_at: datetime | None
     link: str | None
     source_links: dict[int, str] | None
+    match_highlights: list[str] | None
 
 
 # First chunk of info for streaming QA
@@ -156,7 +157,7 @@ class QAResponse(SearchResponse, DanswerAnswer):
     error_msg: str | None = None
 
 
-class ImageGenerationDisplay(BaseModel):
+class FileChatDisplay(BaseModel):
     file_ids: list[str]
 
 
@@ -170,7 +171,7 @@ AnswerQuestionPossibleReturn = (
     | DanswerQuotes
     | CitationInfo
     | DanswerContexts
-    | ImageGenerationDisplay
+    | FileChatDisplay
     | CustomToolResponse
     | StreamingError
     | StreamStopInfo

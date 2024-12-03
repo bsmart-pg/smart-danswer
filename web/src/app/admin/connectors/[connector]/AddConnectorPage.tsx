@@ -4,7 +4,7 @@ import { errorHandlingFetcher } from "@/lib/fetcher";
 import useSWR, { mutate } from "swr";
 import { HealthCheckBanner } from "@/components/health/healthcheck";
 
-import { Card, Title } from "@tremor/react";
+import Title from "@/components/ui/title";
 import { AdminPageTitle } from "@/components/admin/Title";
 import { buildSimilarCredentialInfoURL } from "@/app/admin/connector/[ccPairId]/lib";
 import { usePopup } from "@/components/admin/connectors/Popup";
@@ -40,10 +40,9 @@ import {
   useGoogleDriveCredentials,
 } from "./pages/utils/hooks";
 import { Formik } from "formik";
-import { AccessTypeForm } from "@/components/admin/connectors/AccessTypeForm";
-import { AccessTypeGroupSelector } from "@/components/admin/connectors/AccessTypeGroupSelector";
 import NavigationRow from "./NavigationRow";
 import { useRouter } from "next/navigation";
+import CardSection from "@/components/admin/CardSection";
 export interface AdvancedConfig {
   refreshFreq: number;
   pruneFreq: number;
@@ -55,8 +54,7 @@ const BASE_CONNECTOR_URL = "/api/manage/admin/connector";
 export async function submitConnector<T>(
   connector: ConnectorBase<T>,
   connectorId?: number,
-  fakeCredential?: boolean,
-  isPublicCcpair?: boolean // exclusively for mock credentials, when also need to specify ccpair details
+  fakeCredential?: boolean
 ): Promise<{ message: string; isSuccess: boolean; response?: Connector<T> }> {
   const isUpdate = connectorId !== undefined;
   if (!connector.connector_specific_config) {
@@ -72,7 +70,7 @@ export async function submitConnector<T>(
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ ...connector, is_public: isPublicCcpair }),
+          body: JSON.stringify({ ...connector }),
         }
       );
       if (response.ok) {
@@ -117,7 +115,6 @@ export default function AddConnector({
   // State for managing credentials and files
   const [currentCredential, setCurrentCredential] =
     useState<Credential<any> | null>(null);
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [createConnectorToggle, setCreateConnectorToggle] = useState(false);
 
   // Fetch credentials data
@@ -143,8 +140,8 @@ export default function AddConnector({
   const { popup, setPopup } = usePopup();
 
   // Hooks for Google Drive and Gmail credentials
-  const { liveGDriveCredential } = useGoogleDriveCredentials();
-  const { liveGmailCredential } = useGmailCredentials();
+  const { liveGDriveCredential } = useGoogleDriveCredentials(connector);
+  const { liveGmailCredential } = useGmailCredentials(connector);
 
   // Check if credential is activated
   const credentialActivated =
@@ -209,7 +206,15 @@ export default function AddConnector({
 
   return (
     <Formik
-      initialValues={createConnectorInitialValues(connector)}
+      initialValues={{
+        ...createConnectorInitialValues(connector),
+        ...Object.fromEntries(
+          connectorConfigs[connector].advanced_values.map((field) => [
+            field.name,
+            field.default || "",
+          ])
+        ),
+      }}
       validationSchema={createConnectorValidationSchema(connector)}
       onSubmit={async (values) => {
         const {
@@ -247,10 +252,17 @@ export default function AddConnector({
 
         // Apply advanced configuration-specific transforms.
         const advancedConfiguration: any = {
-          pruneFreq: (pruneFreq || defaultPruneFreqDays) * 60 * 60 * 24,
+          pruneFreq: (pruneFreq ?? defaultPruneFreqDays) * 60 * 60 * 24,
           indexingStart: convertStringToDateTime(indexingStart),
-          refreshFreq: (refreshFreq || defaultRefreshFreqMinutes) * 60,
+          refreshFreq: (refreshFreq ?? defaultRefreshFreqMinutes) * 60,
         };
+
+        // File-specific handling
+        const selectedFiles = Array.isArray(values.file_locations)
+          ? values.file_locations
+          : values.file_locations
+            ? [values.file_locations]
+            : [];
 
         // Google sites-specific handling
         if (connector == "google_sites") {
@@ -261,7 +273,8 @@ export default function AddConnector({
             advancedConfiguration.refreshFreq,
             advancedConfiguration.pruneFreq,
             advancedConfiguration.indexingStart,
-            values.access_type == "public",
+            values.access_type,
+            groups,
             name
           );
           if (response) {
@@ -269,15 +282,13 @@ export default function AddConnector({
           }
           return;
         }
-
         // File-specific handling
-        if (connector == "file" && selectedFiles.length > 0) {
+        if (connector == "file") {
           const response = await submitFiles(
             selectedFiles,
             setPopup,
-            setSelectedFiles,
             name,
-            access_type == "public",
+            access_type,
             groups
           );
           if (response) {
@@ -292,15 +303,14 @@ export default function AddConnector({
             input_type: isLoadState(connector) ? "load_state" : "poll", // single case
             name: name,
             source: connector,
-            is_public: access_type == "public",
+            access_type: access_type,
             refresh_freq: advancedConfiguration.refreshFreq || null,
             prune_freq: advancedConfiguration.pruneFreq || null,
             indexing_start: advancedConfiguration.indexingStart || null,
             groups: groups,
           },
           undefined,
-          credentialActivated ? false : true,
-          access_type == "public"
+          credentialActivated ? false : true
         );
         // If no credential
         if (!credentialActivated) {
@@ -356,7 +366,7 @@ export default function AddConnector({
             />
 
             {formStep == 0 && (
-              <Card>
+              <CardSection>
                 <Title className="mb-2 text-lg">Select a credential</Title>
 
                 {connector == "google_drive" ? (
@@ -413,27 +423,29 @@ export default function AddConnector({
                       )}
                   </>
                 )}
-              </Card>
+              </CardSection>
             )}
 
             {formStep == 1 && (
-              <Card className="w-full py-8 flex gap-y-6 flex-col max-w-3xl px-12 mx-auto">
+              <CardSection className="w-full py-8 flex gap-y-6 flex-col max-w-3xl px-12 mx-auto">
                 <DynamicConnectionForm
                   values={formikProps.values}
                   config={configuration}
-                  setSelectedFiles={setSelectedFiles}
-                  selectedFiles={selectedFiles}
+                  connector={connector}
+                  currentCredential={
+                    currentCredential ||
+                    liveGDriveCredential ||
+                    liveGmailCredential ||
+                    null
+                  }
                 />
-
-                <AccessTypeForm connector={connector} />
-                <AccessTypeGroupSelector />
-              </Card>
+              </CardSection>
             )}
 
             {formStep === 2 && (
-              <Card>
+              <CardSection>
                 <AdvancedFormPage />
-              </Card>
+              </CardSection>
             )}
 
             <NavigationRow

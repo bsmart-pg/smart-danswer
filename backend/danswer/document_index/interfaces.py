@@ -4,9 +4,9 @@ from datetime import datetime
 from typing import Any
 
 from danswer.access.models import DocumentAccess
+from danswer.context.search.models import IndexFilters
+from danswer.context.search.models import InferenceChunkUncleaned
 from danswer.indexing.models import DocMetadataAwareIndexChunk
-from danswer.search.models import IndexFilters
-from danswer.search.models import InferenceChunkUncleaned
 from shared_configs.model_server_models import Embedding
 
 
@@ -124,6 +124,17 @@ class Verifiable(abc.ABC):
         - secondary_index_embedding_dim: Vector dimensionality of the secondary index being built
                 behind the scenes. The secondary index should only be built when switching
                 embedding models therefore this dim should be different from the primary index.
+        """
+        raise NotImplementedError
+
+    @staticmethod
+    @abc.abstractmethod
+    def register_multitenant_indices(
+        indices: list[str],
+        embedding_dims: list[int],
+    ) -> None:
+        """
+        Register multitenant indices with the document index.
         """
         raise NotImplementedError
 

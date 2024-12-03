@@ -1,3 +1,4 @@
+import { useField } from "formik";
 import { FileUpload } from "@/components/admin/connectors/FileUpload";
 import CredentialSubText from "@/components/credentials/CredentialFields";
 
@@ -6,8 +7,7 @@ interface FileInputProps {
   label: string;
   optional?: boolean;
   description?: string;
-  selectedFiles: File[];
-  setSelectedFiles: (files: File[]) => void;
+  isZip?: boolean;
 }
 
 export default function FileInput({
@@ -15,9 +15,10 @@ export default function FileInput({
   label,
   optional = false,
   description,
-  selectedFiles,
-  setSelectedFiles,
+  isZip = false, // Default to false for multiple file uploads
 }: FileInputProps) {
+  const [field, meta, helpers] = useField(name);
+
   return (
     <>
       <label
@@ -29,9 +30,26 @@ export default function FileInput({
       </label>
       {description && <CredentialSubText>{description}</CredentialSubText>}
       <FileUpload
-        selectedFiles={selectedFiles}
-        setSelectedFiles={setSelectedFiles}
+        selectedFiles={
+          Array.isArray(field.value)
+            ? field.value
+            : field.value
+              ? [field.value]
+              : []
+        }
+        setSelectedFiles={(files: File[]) => {
+          if (isZip) {
+            helpers.setValue(files[0] || null);
+          } else {
+            helpers.setValue(files);
+          }
+        }}
+        multiple={!isZip} // Allow multiple files if not a zip
+        accept={isZip ? ".zip" : undefined} // Only accept zip files if isZip is true
       />
+      {meta.touched && meta.error && (
+        <div className="text-red-500 text-sm mt-1">{meta.error}</div>
+      )}
     </>
   );
 }

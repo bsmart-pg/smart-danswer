@@ -10,7 +10,8 @@ export const submitGoogleSite = async (
   refreshFreq: number,
   pruneFreq: number,
   indexingStart: Date,
-  is_public: boolean,
+  access_type: string,
+  groups: number[],
   name?: string
 ) => {
   const uploadCreateAndTriggerConnector = async () => {
@@ -43,7 +44,7 @@ export const submitGoogleSite = async (
           base_url: base_url,
           zip_path: filePaths[0],
         },
-        is_public: is_public,
+        access_type: access_type,
         refresh_freq: refreshFreq,
         prune_freq: pruneFreq,
         indexing_start: indexingStart,
@@ -56,7 +57,13 @@ export const submitGoogleSite = async (
       return false;
     }
 
-    const credentialResponse = await linkCredential(connector.id, 0, base_url);
+    const credentialResponse = await linkCredential(
+      connector.id,
+      0,
+      base_url,
+      undefined,
+      groups
+    );
     if (!credentialResponse.ok) {
       const credentialResponseJson = await credentialResponse.json();
       setPopup({

@@ -4,6 +4,7 @@ from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
 from typing import Literal
+from uuid import UUID
 
 from fastapi import APIRouter
 from fastapi import Depends
@@ -19,10 +20,13 @@ from danswer.configs.constants import MessageType
 from danswer.configs.constants import QAFeedbackType
 from danswer.configs.constants import SessionType
 from danswer.db.chat import get_chat_session_by_id
+from danswer.db.chat import get_chat_sessions_by_user
 from danswer.db.engine import get_session
 from danswer.db.models import ChatMessage
 from danswer.db.models import ChatSession
 from danswer.db.models import User
+from danswer.server.query_and_chat.models import ChatSessionDetails
+from danswer.server.query_and_chat.models import ChatSessionsResponse
 from ee.danswer.db.query_history import fetch_chat_sessions_eagerly_by_time
 
 router = APIRouter()
@@ -83,29 +87,32 @@ class MessageSnapshot(BaseModel):
 
 
 class ChatSessionMinimal(BaseModel):
-    id: int
+    id: UUID
     user_email: str
     name: str | None
     first_user_message: str
     first_ai_message: str
-    persona_name: str | None
+    assistant_id: int | None
+    assistant_name: str | None
     time_created: datetime
     feedback_type: QAFeedbackType | Literal["mixed"] | None
     flow_type: SessionType
+    conversation_length: int
 
 
 class ChatSessionSnapshot(BaseModel):
-    id: int
+    id: UUID
     user_email: str
     name: str | None
     messages: list[MessageSnapshot]
-    persona_name: str | None
+    assistant_id: int | None
+    assistant_name: str | None
     time_created: datetime
     flow_type: SessionType
 
 
 class QuestionAnswerPairSnapshot(BaseModel):
-    chat_session_id: int
+    chat_session_id: UUID
     # 1-indexed message number in the chat_session
     # e.g. the first message pair in the chat_session is 1, the second is 2, etc.
     message_pair_num: int
@@ -142,7 +149,7 @@ class QuestionAnswerPairSnapshot(BaseModel):
                 retrieved_documents=ai_message.documents,
                 feedback_type=ai_message.feedback_type,
                 feedback_text=ai_message.feedback_text,
-                persona_name=chat_session_snapshot.persona_name,
+                persona_name=chat_session_snapshot.assistant_name,
                 user_email=get_display_email(chat_session_snapshot.user_email),
                 time_created=user_message.time_created,
                 flow_type=chat_session_snapshot.flow_type,
@@ -253,12 +260,20 @@ def fetch_and_process_chat_session_history_minimal(
                 name=chat_session.description,
                 first_user_message=first_user_message,
                 first_ai_message=first_ai_message,
-                persona_name=chat_session.persona.name
-                if chat_session.persona
-                else None,
+                assistant_id=chat_session.persona_id,
+                assistant_name=(
+                    chat_session.persona.name if chat_session.persona else None
+                ),
                 time_created=chat_session.time_created,
                 feedback_type=feedback_type,
                 flow_type=flow_type,
+                conversation_length=len(
+                    [
+                        m
+                        for m in chat_session.messages
+                        if m.message_type != MessageType.SYSTEM
+                    ]
+                ),
             )
         )
 
@@ -323,9 +338,40 @@ def snapshot_from_chat_session(
             for message in messages
             if message.message_type != MessageType.SYSTEM
         ],
-        persona_name=chat_session.persona.name if chat_session.persona else None,
+        assistant_id=chat_session.persona_id,
+        assistant_name=chat_session.persona.name if chat_session.persona else None,
         time_created=chat_session.time_created,
         flow_type=flow_type,
+    )
+
+
+@router.get("/admin/chat-sessions")
+def get_user_chat_sessions(
+    user_id: UUID,
+    _: User | None = Depends(current_admin_user),
+    db_session: Session = Depends(get_session),
+) -> ChatSessionsResponse:
+    try:
+        chat_sessions = get_chat_sessions_by_user(
+            user_id=user_id, deleted=False, db_session=db_session, limit=0
+        )
+
+    except ValueError:
+        raise ValueError("Chat session does not exist or has been deleted")
+
+    return ChatSessionsResponse(
+        sessions=[
+            ChatSessionDetails(
+                id=chat.id,
+                name=chat.description,
+                persona_id=chat.persona_id,
+                time_created=chat.time_created.isoformat(),
+                shared_status=chat.shared_status,
+                folder_id=chat.folder_id,
+                current_alternate_model=chat.current_alternate_model,
+            )
+            for chat in chat_sessions
+        ]
     )
 
 
@@ -350,7 +396,7 @@ def get_chat_session_history(
 
 @router.get("/admin/chat-session-history/{chat_session_id}")
 def get_chat_session_admin(
-    chat_session_id: int,
+    chat_session_id: UUID,
     _: User | None = Depends(current_admin_user),
     db_session: Session = Depends(get_session),
 ) -> ChatSessionSnapshot:
@@ -381,12 +427,14 @@ def get_chat_session_admin(
 @router.get("/admin/query-history-csv")
 def get_query_history_as_csv(
     _: User | None = Depends(current_admin_user),
+    start: datetime | None = None,
+    end: datetime | None = None,
     db_session: Session = Depends(get_session),
 ) -> StreamingResponse:
     complete_chat_session_history = fetch_and_process_chat_session_history(
         db_session=db_session,
-        start=datetime.fromtimestamp(0, tz=timezone.utc),
-        end=datetime.now(tz=timezone.utc),
+        start=start or datetime.fromtimestamp(0, tz=timezone.utc),
+        end=end or datetime.now(tz=timezone.utc),
         feedback_type=None,
         limit=None,
     )

@@ -7,12 +7,12 @@ from typing import Optional
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from danswer.context.search.enums import RecencyBiasSetting
 from danswer.db.engine import get_session_context_manager
 from danswer.db.llm import update_default_provider
 from danswer.db.llm import upsert_llm_provider
 from danswer.db.models import Tool
 from danswer.db.persona import upsert_persona
-from danswer.search.enums import RecencyBiasSetting
 from danswer.server.features.persona.models import CreatePersonaRequest
 from danswer.server.manage.llm.models import LLMProviderUpsertRequest
 from danswer.server.settings.models import Settings
@@ -157,7 +157,6 @@ def _seed_personas(db_session: Session, personas: list[CreatePersonaRequest]) ->
 def _seed_settings(settings: Settings) -> None:
     logger.notice("Seeding Settings")
     try:
-        settings.check_validity()
         store_base_settings(settings)
         logger.notice("Successfully seeded Settings")
     except ValueError as e:

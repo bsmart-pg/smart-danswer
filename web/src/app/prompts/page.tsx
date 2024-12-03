@@ -3,11 +3,10 @@ import { unstable_noStore as noStore } from "next/cache";
 import { redirect } from "next/navigation";
 import WrappedPrompts from "../assistants/mine/WrappedInputPrompts";
 
-export default async function GalleryPage({
-  searchParams,
-}: {
-  searchParams: { [key: string]: string };
+export default async function GalleryPage(props: {
+  searchParams: Promise<{ [key: string]: string }>;
 }) {
+  const searchParams = await props.searchParams;
   noStore();
 
   const data = await fetchChatData(searchParams);
@@ -16,14 +15,7 @@ export default async function GalleryPage({
     redirect(data.redirect);
   }
 
-  const {
-    user,
-    chatSessions,
-    assistants,
-    folders,
-    openedFolders,
-    toggleSidebar,
-  } = data;
+  const { chatSessions, folders, openedFolders, toggleSidebar } = data;
 
   return (
     <WrappedPrompts
@@ -31,8 +23,6 @@ export default async function GalleryPage({
       chatSessions={chatSessions}
       folders={folders}
       openedFolders={openedFolders}
-      user={user}
-      assistants={assistants}
     />
   );
 }

@@ -2,7 +2,7 @@ from abc import ABC
 from abc import abstractmethod
 
 from danswer.db.models import SearchSettings
-from danswer.indexing.indexing_heartbeat import Heartbeat
+from danswer.indexing.indexing_heartbeat import IndexingHeartbeatInterface
 from danswer.indexing.models import ChunkEmbedding
 from danswer.indexing.models import DocAwareChunk
 from danswer.indexing.models import IndexChunk
@@ -32,7 +32,9 @@ class IndexingEmbedder(ABC):
         provider_type: EmbeddingProvider | None,
         api_key: str | None,
         api_url: str | None,
-        heartbeat: Heartbeat | None,
+        api_version: str | None,
+        deployment_name: str | None,
+        callback: IndexingHeartbeatInterface | None,
     ):
         self.model_name = model_name
         self.normalize = normalize
@@ -41,6 +43,8 @@ class IndexingEmbedder(ABC):
         self.provider_type = provider_type
         self.api_key = api_key
         self.api_url = api_url
+        self.api_version = api_version
+        self.deployment_name = deployment_name
 
         self.embedding_model = EmbeddingModel(
             model_name=model_name,
@@ -50,11 +54,13 @@ class IndexingEmbedder(ABC):
             api_key=api_key,
             provider_type=provider_type,
             api_url=api_url,
+            api_version=api_version,
+            deployment_name=deployment_name,
             # The below are globally set, this flow always uses the indexing one
             server_host=INDEXING_MODEL_SERVER_HOST,
             server_port=INDEXING_MODEL_SERVER_PORT,
             retrim_content=True,
-            heartbeat=heartbeat,
+            callback=callback,
         )
 
     @abstractmethod
@@ -75,7 +81,9 @@ class DefaultIndexingEmbedder(IndexingEmbedder):
         provider_type: EmbeddingProvider | None = None,
         api_key: str | None = None,
         api_url: str | None = None,
-        heartbeat: Heartbeat | None = None,
+        api_version: str | None = None,
+        deployment_name: str | None = None,
+        callback: IndexingHeartbeatInterface | None = None,
     ):
         super().__init__(
             model_name,
@@ -85,7 +93,9 @@ class DefaultIndexingEmbedder(IndexingEmbedder):
             provider_type,
             api_key,
             api_url,
-            heartbeat,
+            api_version,
+            deployment_name,
+            callback,
         )
 
     @log_function_time()
@@ -93,6 +103,9 @@ class DefaultIndexingEmbedder(IndexingEmbedder):
         self,
         chunks: list[DocAwareChunk],
     ) -> list[IndexChunk]:
+        """Adds embeddings to the chunks, the title and metadata suffixes are added to the chunk as well
+        if they exist. If there is no space for it, it would have been thrown out at the chunking step.
+        """
         # All chunks at this point must have some non-empty content
         flat_chunk_texts: list[str] = []
         large_chunks_present = False
@@ -111,6 +124,11 @@ class DefaultIndexingEmbedder(IndexingEmbedder):
             flat_chunk_texts.append(chunk_text)
 
             if chunk.mini_chunk_texts:
+                if chunk.large_chunk_reference_ids:
+                    # A large chunk does not contain mini chunks, if it matches the large chunk
+                    # with a high score, then mini chunks would not be used anyway
+                    # otherwise it should match the normal chunk
+                    raise RuntimeError("Large chunk contains mini chunks")
                 flat_chunk_texts.extend(chunk.mini_chunk_texts)
 
         embeddings = self.embedding_model.encode(
@@ -183,7 +201,9 @@ class DefaultIndexingEmbedder(IndexingEmbedder):
 
     @classmethod
     def from_db_search_settings(
-        cls, search_settings: SearchSettings, heartbeat: Heartbeat | None = None
+        cls,
+        search_settings: SearchSettings,
+        callback: IndexingHeartbeatInterface | None = None,
     ) -> "DefaultIndexingEmbedder":
         return cls(
             model_name=search_settings.model_name,
@@ -193,5 +213,7 @@ class DefaultIndexingEmbedder(IndexingEmbedder):
             provider_type=search_settings.provider_type,
             api_key=search_settings.api_key,
             api_url=search_settings.api_url,
-            heartbeat=heartbeat,
+            api_version=search_settings.api_version,
+            deployment_name=search_settings.deployment_name,
+            callback=callback,
         )

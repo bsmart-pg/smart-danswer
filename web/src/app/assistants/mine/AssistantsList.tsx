@@ -3,7 +3,8 @@
 import React, { Dispatch, SetStateAction, useEffect, useState } from "react";
 import { MinimalUserSnapshot, User } from "@/lib/types";
 import { Persona } from "@/app/admin/assistants/interfaces";
-import { Button, Divider } from "@tremor/react";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import {
   FiEdit2,
   FiList,
@@ -55,14 +56,11 @@ import {
 } from "@/app/admin/assistants/lib";
 import { DeleteEntityModal } from "@/components/modals/DeleteEntityModal";
 import { MakePublicAssistantModal } from "@/app/chat/modal/MakePublicAssistantModal";
-import {
-  classifyAssistants,
-  getUserCreatedAssistants,
-  orderAssistantsForUser,
-} from "@/lib/assistants/utils";
 import { CustomTooltip } from "@/components/tooltip/CustomTooltip";
+import { useAssistants } from "@/components/context/AssistantsContext";
+import { useUser } from "@/components/user/UserProvider";
 
-function DraggableAssistantListItem(props: any) {
+function DraggableAssistantListItem({ ...props }: any) {
   const {
     attributes,
     listeners,
@@ -102,6 +100,7 @@ function AssistantListItem({
   deleteAssistant,
   shareAssistant,
   isDragging,
+  onlyAssistant,
 }: {
   assistant: Persona;
   user: User | null;
@@ -111,13 +110,13 @@ function AssistantListItem({
   shareAssistant: Dispatch<SetStateAction<Persona | null>>;
   setPopup: (popupSpec: PopupSpec | null) => void;
   isDragging?: boolean;
+  onlyAssistant: boolean;
 }) {
+  const { refreshUser } = useUser();
   const router = useRouter();
   const [showSharingModal, setShowSharingModal] = useState(false);
 
   const isOwnedByUser = checkUserOwnsAssistant(user, assistant);
-  const currentChosenAssistants = user?.preferences
-    ?.chosen_assistants as number[];
 
   return (
     <>
@@ -132,7 +131,9 @@ function AssistantListItem({
         show={showSharingModal}
       />
       <div
-        className={`rounded-lg px-4 py-6 transition-all duration-900 hover:bg-background-125 ${isDragging && "bg-background-125"}`}
+        className={`rounded-lg px-4 py-6 transition-all duration-900 hover:bg-background-125 ${
+          isDragging && "bg-background-125"
+        }`}
       >
         <div className="flex justify-between items-center">
           <AssistantIcon assistant={assistant} />
@@ -191,13 +192,14 @@ function AssistantListItem({
                     key="remove"
                     className="flex items-center gap-x-2 px-4 py-2 hover:bg-gray-100 w-full text-left"
                     onClick={async () => {
-                      if (currentChosenAssistants?.length === 1) {
+                      if (onlyAssistant) {
                         setPopup({
                           message: `Cannot remove "${assistant.name}" - you must have at least one assistant.`,
                           type: "error",
                         });
                         return;
                       }
+
                       const success = await removeAssistantFromList(
                         assistant.id
                       );
@@ -206,7 +208,7 @@ function AssistantListItem({
                           message: `"${assistant.name}" has been removed from your list.`,
                           type: "success",
                         });
-                        router.refresh();
+                        await refreshUser();
                       } else {
                         setPopup({
                           message: `"${assistant.name}" could not be removed from your list.`,
@@ -229,7 +231,7 @@ function AssistantListItem({
                           message: `"${assistant.name}" has been added to your list.`,
                           type: "success",
                         });
-                        router.refresh();
+                        await refreshUser();
                       } else {
                         setPopup({
                           message: `"${assistant.name}" could not be added to your list.`,
@@ -284,32 +286,20 @@ function AssistantListItem({
     </>
   );
 }
-export function AssistantsList({
-  user,
-  assistants,
-}: {
-  user: User | null;
-  assistants: Persona[];
-}) {
-  // Define the distinct groups of assistants
-  const { visibleAssistants, hiddenAssistants } = classifyAssistants(
-    user,
-    assistants
-  );
+export function AssistantsList() {
+  const {
+    assistants,
+    ownedButHiddenAssistants,
+    finalAssistants,
+    refreshAssistants,
+  } = useAssistants();
 
-  const [currentlyVisibleAssistants, setCurrentlyVisibleAssistants] = useState<
-    Persona[]
-  >([]);
+  const [currentlyVisibleAssistants, setCurrentlyVisibleAssistants] =
+    useState(finalAssistants);
 
   useEffect(() => {
-    const orderedAssistants = orderAssistantsForUser(visibleAssistants, user);
-    setCurrentlyVisibleAssistants(orderedAssistants);
-  }, [assistants, user]);
-
-  const ownedButHiddenAssistants = getUserCreatedAssistants(
-    user,
-    hiddenAssistants
-  );
+    setCurrentlyVisibleAssistants(finalAssistants);
+  }, [finalAssistants]);
 
   const allAssistantIds = assistants.map((assistant) =>
     assistant.id.toString()
@@ -319,6 +309,8 @@ export function AssistantsList({
   const [makePublicPersona, setMakePublicPersona] = useState<Persona | null>(
     null
   );
+
+  const { refreshUser, user } = useUser();
 
   const { popup, setPopup } = usePopup();
   const router = useRouter();
@@ -338,18 +330,20 @@ export function AssistantsList({
     const { active, over } = event;
 
     if (over && active.id !== over.id) {
-      setCurrentlyVisibleAssistants((assistants) => {
-        const oldIndex = assistants.findIndex(
-          (a) => a.id.toString() === active.id
-        );
-        const newIndex = assistants.findIndex(
-          (a) => a.id.toString() === over.id
-        );
-        const newAssistants = arrayMove(assistants, oldIndex, newIndex);
+      const oldIndex = currentlyVisibleAssistants.findIndex(
+        (item) => item.id.toString() === active.id
+      );
+      const newIndex = currentlyVisibleAssistants.findIndex(
+        (item) => item.id.toString() === over.id
+      );
+      const updatedAssistants = arrayMove(
+        currentlyVisibleAssistants,
+        oldIndex,
+        newIndex
+      );
 
-        updateUserAssistantList(newAssistants.map((a) => a.id));
-        return newAssistants;
-      });
+      setCurrentlyVisibleAssistants(updatedAssistants);
+      await updateUserAssistantList(updatedAssistants.map((a) => a.id));
     }
   }
 
@@ -368,7 +362,7 @@ export function AssistantsList({
                 message: `"${deletingPersona.name}" has been deleted.`,
                 type: "success",
               });
-              router.refresh();
+              await refreshUser();
             } else {
               setPopup({
                 message: `"${deletingPersona.name}" could not be deleted.`,
@@ -389,7 +383,7 @@ export function AssistantsList({
               makePublicPersona.id,
               newPublicStatus
             );
-            router.refresh();
+            await refreshAssistants();
           }}
         />
       )}
@@ -399,8 +393,9 @@ export function AssistantsList({
 
         <div className="grid grid-cols-2 gap-4 mt-4 mb-8">
           <Button
+            variant="default"
+            className="p-6 text-base"
             onClick={() => router.push("/assistants/new")}
-            className="w-full py-3 text-lg rounded-full bg-background-800 text-white hover:bg-background-800 transition duration-300 ease-in-out"
             icon={FiPlus}
           >
             Create New Assistant
@@ -408,7 +403,8 @@ export function AssistantsList({
 
           <Button
             onClick={() => router.push("/assistants/gallery")}
-            className="w-full hover:border-border-strong py-3 text-lg rounded-full bg-white border !border-border shadow text-text-700 hover:bg-background-50 transition duration-300 ease-in-out"
+            variant="outline"
+            className="text-base py-6"
             icon={FiList}
           >
             Assistant Gallery
@@ -437,6 +433,7 @@ export function AssistantsList({
             <div className="w-full items-center py-4">
               {currentlyVisibleAssistants.map((assistant, index) => (
                 <DraggableAssistantListItem
+                  onlyAssistant={currentlyVisibleAssistants.length === 1}
                   deleteAssistant={setDeletingPersona}
                   shareAssistant={setMakePublicPersona}
                   key={assistant.id}
@@ -454,7 +451,7 @@ export function AssistantsList({
 
         {ownedButHiddenAssistants.length > 0 && (
           <>
-            <Divider />
+            <Separator />
 
             <h3 className="text-xl font-bold mb-4">Your Hidden Assistants</h3>
 
@@ -466,6 +463,7 @@ export function AssistantsList({
             <div className="w-full p-4">
               {ownedButHiddenAssistants.map((assistant, index) => (
                 <AssistantListItem
+                  onlyAssistant={currentlyVisibleAssistants.length === 1}
                   deleteAssistant={setDeletingPersona}
                   shareAssistant={setMakePublicPersona}
                   key={assistant.id}

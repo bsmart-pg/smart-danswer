@@ -1,6 +1,8 @@
 import { LoadingAnimation } from "@/components/Loading";
 import { AdvancedOptionsToggle } from "@/components/AdvancedOptionsToggle";
-import { Button, Divider, Text } from "@tremor/react";
+import Text from "@/components/ui/text";
+import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
 import { Form, Formik } from "formik";
 import { FiTrash } from "react-icons/fi";
 import { LLM_PROVIDERS_ADMIN_URL } from "./constants";
@@ -25,6 +27,7 @@ export function LLMProviderUpdateForm({
   shouldMarkAsDefault,
   setPopup,
   hideAdvanced,
+  hideSuccess,
 }: {
   llmProviderDescriptor: WellKnownLLMProviderDescriptor;
   onClose: () => void;
@@ -32,6 +35,7 @@ export function LLMProviderUpdateForm({
   shouldMarkAsDefault?: boolean;
   hideAdvanced?: boolean;
   setPopup?: (popup: PopupSpec) => void;
+  hideSuccess?: boolean;
 }) {
   const { mutate } = useSWRConfig();
 
@@ -68,6 +72,7 @@ export function LLMProviderUpdateForm({
       existingLlmProvider?.display_model_names ||
       defaultModelsByProvider[llmProviderDescriptor.name] ||
       [],
+    deployment_name: existingLlmProvider?.deployment_name,
   };
 
   // Setup validation schema if required
@@ -99,6 +104,9 @@ export function LLMProviderUpdateForm({
           ),
         }
       : {}),
+    deployment_name: llmProviderDescriptor.deployment_name_required
+      ? Yup.string().required("Deployment Name is required")
+      : Yup.string().nullable(),
     default_model_name: Yup.string().required("Model name is required"),
     fast_default_model_name: Yup.string().nullable(),
     // EE Only
@@ -138,7 +146,9 @@ export function LLMProviderUpdateForm({
         }
 
         const response = await fetch(
-          `${LLM_PROVIDERS_ADMIN_URL}${existingLlmProvider ? "" : "?is_creation=true"}`,
+          `${LLM_PROVIDERS_ADMIN_URL}${
+            existingLlmProvider ? "" : "?is_creation=true"
+          }`,
           {
             method: "PUT",
             headers: {
@@ -198,7 +208,7 @@ export function LLMProviderUpdateForm({
         const successMsg = existingLlmProvider
           ? "Provider updated successfully!"
           : "Provider enabled successfully!";
-        if (setPopup) {
+        if (!hideSuccess && setPopup) {
           setPopup({
             type: "success",
             message: successMsg,
@@ -267,8 +277,7 @@ export function LLMProviderUpdateForm({
 
           {!(hideAdvanced && llmProviderDescriptor.name != "azure") && (
             <>
-              <Divider />
-
+              <Separator />
               {llmProviderDescriptor.llm_names.length > 0 ? (
                 <SelectorFormField
                   name="default_model_name"
@@ -288,41 +297,50 @@ export function LLMProviderUpdateForm({
                   placeholder="E.g. gpt-4"
                 />
               )}
-
-              {llmProviderDescriptor.llm_names.length > 0 ? (
-                <SelectorFormField
-                  name="fast_default_model_name"
-                  subtext={`The model to use for lighter flows like \`LLM Chunk Filter\` 
-                for this provider. If \`Default\` is specified, will use 
-                the Default Model configured above.`}
-                  label="[Optional] Fast Model"
-                  options={llmProviderDescriptor.llm_names.map((name) => ({
-                    name: getDisplayNameForModel(name),
-                    value: name,
-                  }))}
-                  includeDefault
-                  maxHeight="max-h-56"
-                />
-              ) : (
+              {llmProviderDescriptor.deployment_name_required && (
                 <TextFormField
-                  name="fast_default_model_name"
-                  subtext={`The model to use for lighter flows like \`LLM Chunk Filter\` 
-                for this provider. If \`Default\` is specified, will use 
-                the Default Model configured above.`}
-                  label="[Optional] Fast Model"
-                  placeholder="E.g. gpt-4"
+                  small={hideAdvanced}
+                  name="deployment_name"
+                  label="Deployment Name"
+                  placeholder="Deployment Name"
                 />
               )}
-
-              <Divider />
+              {!llmProviderDescriptor.single_model_supported &&
+                (llmProviderDescriptor.llm_names.length > 0 ? (
+                  <SelectorFormField
+                    name="fast_default_model_name"
+                    subtext={`The model to use for lighter flows like \`LLM Chunk Filter\` 
+                for this provider. If \`Default\` is specified, will use 
+                the Default Model configured above.`}
+                    label="[Optional] Fast Model"
+                    options={llmProviderDescriptor.llm_names.map((name) => ({
+                      name: getDisplayNameForModel(name),
+                      value: name,
+                    }))}
+                    includeDefault
+                    maxHeight="max-h-56"
+                  />
+                ) : (
+                  <TextFormField
+                    name="fast_default_model_name"
+                    subtext={`The model to use for lighter flows like \`LLM Chunk Filter\` 
+                for this provider. If \`Default\` is specified, will use 
+                the Default Model configured above.`}
+                    label="[Optional] Fast Model"
+                    placeholder="E.g. gpt-4"
+                  />
+                ))}
 
               {llmProviderDescriptor.name != "azure" && (
-                <AdvancedOptionsToggle
-                  showAdvancedOptions={showAdvancedOptions}
-                  setShowAdvancedOptions={setShowAdvancedOptions}
-                />
-              )}
+                <>
+                  <Separator />
 
+                  <AdvancedOptionsToggle
+                    showAdvancedOptions={showAdvancedOptions}
+                    setShowAdvancedOptions={setShowAdvancedOptions}
+                  />
+                </>
+              )}
               {showAdvancedOptions && (
                 <>
                   {llmProviderDescriptor.llm_names.length > 0 && (
@@ -365,7 +383,7 @@ export function LLMProviderUpdateForm({
             {testError && <Text className="text-error mt-2">{testError}</Text>}
 
             <div className="flex w-full mt-4">
-              <Button type="submit" size="xs">
+              <Button type="submit" variant="submit">
                 {isTesting ? (
                   <LoadingAnimation text="Testing" />
                 ) : existingLlmProvider ? (
@@ -377,9 +395,8 @@ export function LLMProviderUpdateForm({
               {existingLlmProvider && (
                 <Button
                   type="button"
-                  color="red"
+                  variant="destructive"
                   className="ml-3"
-                  size="xs"
                   icon={FiTrash}
                   onClick={async () => {
                     const response = await fetch(
