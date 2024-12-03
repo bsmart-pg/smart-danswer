@@ -3,8 +3,8 @@ import os
 import pytest
 import redis
 
-from danswer.redis.redis_pool import RedisPool
-from danswer.utils.logger import setup_logger
+from bsmart.redis.redis_pool import RedisPool
+from bsmart.utils.logger import setup_logger
 
 logger = setup_logger()
 

@@ -5,12 +5,12 @@ from unittest.mock import Mock
 import pytest
 from pytest_mock import MockerFixture
 
-from danswer.llm.answering.answer import Answer
-from danswer.llm.answering.models import AnswerStyleConfig
-from danswer.llm.answering.models import PromptConfig
-from danswer.one_shot_answer.answer_question import AnswerObjectIterator
-from danswer.tools.force import ForceUseTool
-from danswer.tools.tool_implementations.search.search_tool import SearchTool
+from bsmart.llm.answering.answer import Answer
+from bsmart.llm.answering.models import AnswerStyleConfig
+from bsmart.llm.answering.models import PromptConfig
+from bsmart.one_shot_answer.answer_question import AnswerObjectIterator
+from bsmart.tools.force import ForceUseTool
+from bsmart.tools.tool_implementations.search.search_tool import SearchTool
 from tests.regression.answer_quality.run_qa import _process_and_write_query_results
 
 

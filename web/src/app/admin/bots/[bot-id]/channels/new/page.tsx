@@ -60,7 +60,7 @@ async function NewChannelConfigPage(props: {
       <BackButton />
       <AdminPageTitle
         icon={<SourceIcon iconSize={32} sourceType={"slack"} />}
-        title="Configure DanswerBot for Slack Channel"
+        title="Configure BsmartBot for Slack Channel"
       />
 
       <SlackChannelConfigCreationForm

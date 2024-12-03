@@ -2,18 +2,18 @@ from datetime import datetime
 
 import pytest
 
-from danswer.chat.models import CitationInfo
-from danswer.chat.models import DanswerAnswerPiece
-from danswer.chat.models import LlmDoc
-from danswer.configs.constants import DocumentSource
-from danswer.llm.answering.stream_processing.citation_processing import (
+from bsmart.chat.models import CitationInfo
+from bsmart.chat.models import BsmartAnswerPiece
+from bsmart.chat.models import LlmDoc
+from bsmart.configs.constants import DocumentSource
+from bsmart.llm.answering.stream_processing.citation_processing import (
     CitationProcessor,
 )
-from danswer.llm.answering.stream_processing.utils import DocumentIdOrderMapping
+from bsmart.llm.answering.stream_processing.utils import DocumentIdOrderMapping
 
 
 """
-This module contains tests for the citation extraction functionality in Danswer.
+This module contains tests for the citation extraction functionality in Bsmart.
 
 The tests focus on the `extract_citations_from_stream` function, which processes
 a stream of tokens and extracts citations, replacing them with properly formatted
@@ -76,7 +76,7 @@ def process_text(
         doc_id_to_rank_map=mapping,
         stop_stream=None,
     )
-    result: list[DanswerAnswerPiece | CitationInfo] = []
+    result: list[BsmartAnswerPiece | CitationInfo] = []
     for token in tokens:
         result.extend(processor.process_token(token))
     result.extend(processor.process_token(None))
@@ -84,7 +84,7 @@ def process_text(
     final_answer_text = ""
     citations = []
     for piece in result:
-        if isinstance(piece, DanswerAnswerPiece):
+        if isinstance(piece, BsmartAnswerPiece):
             final_answer_text += piece.answer_piece or ""
         elif isinstance(piece, CitationInfo):
             citations.append(piece)

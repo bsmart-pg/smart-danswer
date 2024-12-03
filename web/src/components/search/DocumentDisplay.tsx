@@ -1,10 +1,10 @@
 "use client";
 import React from "react";
 import {
-  DanswerDocument,
+  BsmartDocument,
   DocumentRelevance,
-  LoadedDanswerDocument,
-  SearchDanswerDocument,
+  LoadedBsmartDocument,
+  SearchBsmartDocument,
 } from "@/lib/search/interfaces";
 import { DocumentFeedbackBlock } from "./DocumentFeedbackBlock";
 import { useContext, useState } from "react";
@@ -126,7 +126,7 @@ export const buildDocumentSummaryDisplay = (
 export function DocumentMetadataBlock({
   document,
 }: {
-  document: DanswerDocument;
+  document: BsmartDocument;
 }) {
   // don't display super long tags, as they are ugly
   const MAXIMUM_TAG_LENGTH = 40;
@@ -162,7 +162,7 @@ export function DocumentMetadataBlock({
 }
 
 interface DocumentDisplayProps {
-  document: SearchDanswerDocument;
+  document: SearchBsmartDocument;
   messageId: number | null;
   documentRank: number;
   isSelected: boolean;
@@ -190,7 +190,7 @@ export const DocumentDisplay = ({
     document.relevance_explanation ?? additional_relevance?.content;
   const settings = useContext(SettingsContext);
   const [presentingDocument, setPresentingDocument] =
-    useState<DanswerDocument | null>(null);
+    useState<BsmartDocument | null>(null);
 
   const handleViewFile = async () => {
     setPresentingDocument(document);
@@ -315,7 +315,7 @@ export const AgenticDocumentDisplay = ({
 }: DocumentDisplayProps) => {
   const [isHovered, setIsHovered] = useState(false);
   const [presentingDocument, setPresentingDocument] =
-    useState<DanswerDocument | null>(null);
+    useState<BsmartDocument | null>(null);
 
   const [alternativeToggled, setAlternativeToggled] = useState(false);
 
@@ -426,7 +426,7 @@ export function CompactDocumentCard({
   icon,
   url,
 }: {
-  document: LoadedDanswerDocument;
+  document: LoadedBsmartDocument;
   icon?: React.ReactNode;
   url?: string;
 }) {

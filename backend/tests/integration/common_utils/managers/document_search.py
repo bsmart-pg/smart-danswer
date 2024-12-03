@@ -1,10 +1,10 @@
 import requests
 
-from danswer.context.search.enums import LLMEvaluationType
-from danswer.context.search.enums import SearchType
-from danswer.context.search.models import RetrievalDetails
-from danswer.context.search.models import SavedSearchDocWithContent
-from ee.danswer.server.query_and_chat.models import DocumentSearchRequest
+from bsmart.context.search.enums import LLMEvaluationType
+from bsmart.context.search.enums import SearchType
+from bsmart.context.search.models import RetrievalDetails
+from bsmart.context.search.models import SavedSearchDocWithContent
+from ee.bsmart.server.query_and_chat.models import DocumentSearchRequest
 from tests.integration.common_utils.constants import API_SERVER_URL
 from tests.integration.common_utils.constants import GENERAL_HEADERS
 from tests.integration.common_utils.test_models import DATestUser

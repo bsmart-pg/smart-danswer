@@ -5,19 +5,19 @@ from unittest.mock import patch
 
 import pytest
 
-from danswer.tools.models import DynamicSchemaInfo
-from danswer.tools.models import ToolResponse
-from danswer.tools.tool_implementations.custom.custom_tool import (
+from bsmart.tools.models import DynamicSchemaInfo
+from bsmart.tools.models import ToolResponse
+from bsmart.tools.tool_implementations.custom.custom_tool import (
     build_custom_tools_from_openapi_schema_and_headers,
 )
-from danswer.tools.tool_implementations.custom.custom_tool import (
+from bsmart.tools.tool_implementations.custom.custom_tool import (
     CUSTOM_TOOL_RESPONSE_ID,
 )
-from danswer.tools.tool_implementations.custom.custom_tool import CustomToolCallSummary
-from danswer.tools.tool_implementations.custom.custom_tool import (
+from bsmart.tools.tool_implementations.custom.custom_tool import CustomToolCallSummary
+from bsmart.tools.tool_implementations.custom.custom_tool import (
     validate_openapi_schema,
 )
-from danswer.utils.headers import HeaderItemDict
+from bsmart.utils.headers import HeaderItemDict
 
 
 class TestCustomTool(unittest.TestCase):
@@ -82,7 +82,7 @@ class TestCustomTool(unittest.TestCase):
             chat_session_id=uuid.uuid4(), message_id=20
         )
 
-    @patch("danswer.tools.tool_implementations.custom.custom_tool.requests.request")
+    @patch("bsmart.tools.tool_implementations.custom.custom_tool.requests.request")
     def test_custom_tool_run_get(self, mock_request: unittest.mock.MagicMock) -> None:
         """
         Test the GET method of a custom tool.
@@ -110,7 +110,7 @@ class TestCustomTool(unittest.TestCase):
             "Tool name in response does not match expected value",
         )
 
-    @patch("danswer.tools.tool_implementations.custom.custom_tool.requests.request")
+    @patch("bsmart.tools.tool_implementations.custom.custom_tool.requests.request")
     def test_custom_tool_run_post(self, mock_request: unittest.mock.MagicMock) -> None:
         """
         Test the POST method of a custom tool.
@@ -140,7 +140,7 @@ class TestCustomTool(unittest.TestCase):
             "Tool name in response does not match expected value",
         )
 
-    @patch("danswer.tools.tool_implementations.custom.custom_tool.requests.request")
+    @patch("bsmart.tools.tool_implementations.custom.custom_tool.requests.request")
     def test_custom_tool_with_headers(
         self, mock_request: unittest.mock.MagicMock
     ) -> None:
@@ -168,7 +168,7 @@ class TestCustomTool(unittest.TestCase):
             "GET", expected_url, json=None, headers=expected_headers
         )
 
-    @patch("danswer.tools.tool_implementations.custom.custom_tool.requests.request")
+    @patch("bsmart.tools.tool_implementations.custom.custom_tool.requests.request")
     def test_custom_tool_with_empty_headers(
         self, mock_request: unittest.mock.MagicMock
     ) -> None:

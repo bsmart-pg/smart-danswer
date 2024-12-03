@@ -886,7 +886,7 @@ export function AssistantEditor({
                                       <>
                                         If this functionality would be useful,
                                         reach out to the administrators of
-                                        Danswer for assistance.
+                                        Bsmart for assistance.
                                       </>
                                     )}
                                   </p>
@@ -1185,7 +1185,7 @@ export function AssistantEditor({
                           setFieldValue("task_prompt", e.target.value);
                         }}
                         explanationText="Learn about prompting in our docs!"
-                        explanationLink="https://docs.danswer.dev/guides/assistants"
+                        explanationLink="https://docs.bsmart.dev/guides/assistants"
                       />
                     </>
                   )}

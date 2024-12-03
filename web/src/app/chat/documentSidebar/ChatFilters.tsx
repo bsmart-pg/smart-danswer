@@ -1,4 +1,4 @@
-import { DanswerDocument } from "@/lib/search/interfaces";
+import { BsmartDocument } from "@/lib/search/interfaces";
 import { ChatDocumentDisplay } from "./ChatDocumentDisplay";
 import { usePopup } from "@/components/admin/connectors/Popup";
 import { removeDuplicateDocs } from "@/lib/documentUtils";
@@ -20,8 +20,8 @@ interface ChatFiltersProps {
   filterManager: FilterManager;
   closeSidebar: () => void;
   selectedMessage: Message | null;
-  selectedDocuments: DanswerDocument[] | null;
-  toggleDocumentSelection: (document: DanswerDocument) => void;
+  selectedDocuments: BsmartDocument[] | null;
+  toggleDocumentSelection: (document: BsmartDocument) => void;
   clearSelectedDocuments: () => void;
   selectedDocumentTokens: number;
   maxTokens: number;
@@ -32,7 +32,7 @@ interface ChatFiltersProps {
   tags: Tag[];
   documentSets: DocumentSet[];
   showFilters: boolean;
-  setPresentingDocument: Dispatch<SetStateAction<DanswerDocument | null>>;
+  setPresentingDocument: Dispatch<SetStateAction<BsmartDocument | null>>;
 }
 
 export const ChatFilters = forwardRef<HTMLDivElement, ChatFiltersProps>(
@@ -84,7 +84,7 @@ export const ChatFilters = forwardRef<HTMLDivElement, ChatFiltersProps>(
 
     return (
       <div
-        id="danswer-chat-sidebar"
+        id="bsmart-chat-sidebar"
         className={`relative py-2 max-w-full ${
           !modal ? "border-l h-full border-sidebar-border" : ""
         }`}

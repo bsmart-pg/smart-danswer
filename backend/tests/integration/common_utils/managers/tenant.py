@@ -4,9 +4,9 @@ from datetime import timedelta
 import jwt
 import requests
 
-from danswer.server.manage.models import AllUsersResponse
-from danswer.server.models import FullUserSnapshot
-from danswer.server.models import InvitedUserSnapshot
+from bsmart.server.manage.models import AllUsersResponse
+from bsmart.server.models import FullUserSnapshot
+from bsmart.server.models import InvitedUserSnapshot
 from tests.integration.common_utils.constants import API_SERVER_URL
 from tests.integration.common_utils.constants import GENERAL_HEADERS
 from tests.integration.common_utils.test_models import DATestUser

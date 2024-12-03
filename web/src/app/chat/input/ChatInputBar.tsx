@@ -18,7 +18,7 @@ import {
   SendIcon,
   StopGeneratingIcon,
 } from "@/components/icons/icons";
-import { DanswerDocument, SourceMetadata } from "@/lib/search/interfaces";
+import { BsmartDocument, SourceMetadata } from "@/lib/search/interfaces";
 import { AssistantIcon } from "@/components/assistants/AssistantIcon";
 import {
   Tooltip,
@@ -49,7 +49,7 @@ interface ChatInputBarProps {
   openModelSettings: () => void;
   showDocs: () => void;
   showConfigureAPIKey: () => void;
-  selectedDocuments: DanswerDocument[];
+  selectedDocuments: BsmartDocument[];
   message: string;
   setMessage: (message: string) => void;
   stopGenerating: () => void;
@@ -291,7 +291,7 @@ export function ChatInputBar({
   };
 
   return (
-    <div id="danswer-chat-input">
+    <div id="bsmart-chat-input">
       <div className="flex justify-center mx-auto">
         <div
           className="

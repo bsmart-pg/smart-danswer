@@ -1,16 +1,16 @@
 FROM node:20-alpine AS base
 
-LABEL com.danswer.maintainer="founders@danswer.ai"
-LABEL com.danswer.description="This image is the web/frontend container of Danswer which \
-contains code for both the Community and Enterprise editions of Danswer. If you do not \
-have a contract or agreement with DanswerAI, you are not permitted to use the Enterprise \
+LABEL com.bsmart.maintainer="founders@bsmart.ai"
+LABEL com.bsmart.description="This image is the web/frontend container of Bsmart which \
+contains code for both the Community and Enterprise editions of Bsmart. If you do not \
+have a contract or agreement with BsmartAI, you are not permitted to use the Enterprise \
 Edition features outside of personal development or testing purposes. Please reach out to \
-founders@danswer.ai for more information. Please visit https://github.com/danswer-ai/danswer"
+founders@bsmart.ai for more information. Please visit https://github.com/bsmart-ai/bsmart"
 
-# Default DANSWER_VERSION, typically overriden during builds by GitHub Actions.
-ARG DANSWER_VERSION=0.8-dev
-ENV DANSWER_VERSION=${DANSWER_VERSION}
-RUN echo "DANSWER_VERSION: ${DANSWER_VERSION}"
+# Default BSMART_VERSION, typically overriden during builds by GitHub Actions.
+ARG BSMART_VERSION=0.8-dev
+ENV BSMART_VERSION=${BSMART_VERSION}
+RUN echo "BSMART_VERSION: ${BSMART_VERSION}"
 
 # Step 1. Install dependencies + rebuild the source code only when needed
 FROM base AS builder
@@ -52,8 +52,8 @@ ENV NEXT_PUBLIC_DEFAULT_SIDEBAR_OPEN=${NEXT_PUBLIC_DEFAULT_SIDEBAR_OPEN}
 ARG NEXT_PUBLIC_THEME
 ENV NEXT_PUBLIC_THEME=${NEXT_PUBLIC_THEME}
 
-ARG NEXT_PUBLIC_DO_NOT_USE_TOGGLE_OFF_DANSWER_POWERED
-ENV NEXT_PUBLIC_DO_NOT_USE_TOGGLE_OFF_DANSWER_POWERED=${NEXT_PUBLIC_DO_NOT_USE_TOGGLE_OFF_DANSWER_POWERED}
+ARG NEXT_PUBLIC_DO_NOT_USE_TOGGLE_OFF_BSMART_POWERED
+ENV NEXT_PUBLIC_DO_NOT_USE_TOGGLE_OFF_BSMART_POWERED=${NEXT_PUBLIC_DO_NOT_USE_TOGGLE_OFF_BSMART_POWERED}
 
 ARG NEXT_PUBLIC_DISABLE_LOGOUT
 ENV NEXT_PUBLIC_DISABLE_LOGOUT=${NEXT_PUBLIC_DISABLE_LOGOUT}
@@ -120,8 +120,8 @@ ENV NEXT_PUBLIC_NEGATIVE_PREDEFINED_FEEDBACK_OPTIONS=${NEXT_PUBLIC_NEGATIVE_PRED
 ARG NEXT_PUBLIC_THEME
 ENV NEXT_PUBLIC_THEME=${NEXT_PUBLIC_THEME}
 
-ARG NEXT_PUBLIC_DO_NOT_USE_TOGGLE_OFF_DANSWER_POWERED
-ENV NEXT_PUBLIC_DO_NOT_USE_TOGGLE_OFF_DANSWER_POWERED=${NEXT_PUBLIC_DO_NOT_USE_TOGGLE_OFF_DANSWER_POWERED}
+ARG NEXT_PUBLIC_DO_NOT_USE_TOGGLE_OFF_BSMART_POWERED
+ENV NEXT_PUBLIC_DO_NOT_USE_TOGGLE_OFF_BSMART_POWERED=${NEXT_PUBLIC_DO_NOT_USE_TOGGLE_OFF_BSMART_POWERED}
 
 ARG NEXT_PUBLIC_DEFAULT_SIDEBAR_OPEN
 ENV NEXT_PUBLIC_DEFAULT_SIDEBAR_OPEN=${NEXT_PUBLIC_DEFAULT_SIDEBAR_OPEN}

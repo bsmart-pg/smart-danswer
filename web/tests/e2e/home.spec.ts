@@ -16,7 +16,7 @@ test(
 
     await page.waitForURL("http://localhost:3000/auth/login?next=%2Fchat");
 
-    await expect(page).toHaveTitle("Danswer");
+    await expect(page).toHaveTitle("Bsmart");
 
     await takeSnapshot(page, "Before login", testInfo);
 

@@ -5,7 +5,7 @@ from pytest_mock import MockFixture
 from pywikibot.families.wikipedia_family import Family as WikipediaFamily  # type: ignore[import-untyped]
 from pywikibot.family import Family  # type: ignore[import-untyped]
 
-from danswer.connectors.mediawiki import family
+from bsmart.connectors.mediawiki import family
 
 
 # Disabling these tests as they are flaky and rely on external wikis that are maintained by just fan communities

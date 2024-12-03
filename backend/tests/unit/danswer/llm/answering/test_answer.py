@@ -11,24 +11,24 @@ from langchain_core.messages import SystemMessage
 from langchain_core.messages import ToolCall
 from langchain_core.messages import ToolCallChunk
 
-from danswer.chat.models import CitationInfo
-from danswer.chat.models import DanswerAnswerPiece
-from danswer.chat.models import DanswerQuote
-from danswer.chat.models import DanswerQuotes
-from danswer.chat.models import LlmDoc
-from danswer.chat.models import StreamStopInfo
-from danswer.chat.models import StreamStopReason
-from danswer.llm.answering.answer import Answer
-from danswer.llm.answering.models import AnswerStyleConfig
-from danswer.llm.answering.models import PromptConfig
-from danswer.llm.answering.models import QuotesConfig
-from danswer.llm.interfaces import LLM
-from danswer.tools.force import ForceUseTool
-from danswer.tools.models import ToolCallFinalResult
-from danswer.tools.models import ToolCallKickoff
-from danswer.tools.models import ToolResponse
-from tests.unit.danswer.llm.answering.conftest import DEFAULT_SEARCH_ARGS
-from tests.unit.danswer.llm.answering.conftest import QUERY
+from bsmart.chat.models import CitationInfo
+from bsmart.chat.models import BsmartAnswerPiece
+from bsmart.chat.models import BsmartQuote
+from bsmart.chat.models import BsmartQuotes
+from bsmart.chat.models import LlmDoc
+from bsmart.chat.models import StreamStopInfo
+from bsmart.chat.models import StreamStopReason
+from bsmart.llm.answering.answer import Answer
+from bsmart.llm.answering.models import AnswerStyleConfig
+from bsmart.llm.answering.models import PromptConfig
+from bsmart.llm.answering.models import QuotesConfig
+from bsmart.llm.interfaces import LLM
+from bsmart.tools.force import ForceUseTool
+from bsmart.tools.models import ToolCallFinalResult
+from bsmart.tools.models import ToolCallKickoff
+from bsmart.tools.models import ToolResponse
+from tests.unit.bsmart.llm.answering.conftest import DEFAULT_SEARCH_ARGS
+from tests.unit.bsmart.llm.answering.conftest import QUERY
 
 
 @pytest.fixture
@@ -53,13 +53,13 @@ def test_basic_answer(answer_instance: Answer) -> None:
 
     output = list(answer_instance.processed_streamed_output)
     assert len(output) == 2
-    assert isinstance(output[0], DanswerAnswerPiece)
-    assert isinstance(output[1], DanswerAnswerPiece)
+    assert isinstance(output[0], BsmartAnswerPiece)
+    assert isinstance(output[1], BsmartAnswerPiece)
 
     full_answer = "".join(
         piece.answer_piece
         for piece in output
-        if isinstance(piece, DanswerAnswerPiece) and piece.answer_piece is not None
+        if isinstance(piece, BsmartAnswerPiece) and piece.answer_piece is not None
     )
     assert full_answer == "This is a mock answer."
 
@@ -154,13 +154,13 @@ def test_answer_with_search_call(
         tool_args=expected_tool_args,
         tool_result=[json.loads(doc.model_dump_json()) for doc in mock_search_results],
     )
-    assert output[3] == DanswerAnswerPiece(answer_piece="Based on the search results, ")
+    assert output[3] == BsmartAnswerPiece(answer_piece="Based on the search results, ")
     expected_citation = CitationInfo(citation_num=1, document_id="doc1")
     assert output[4] == expected_citation
-    assert output[5] == DanswerAnswerPiece(
+    assert output[5] == BsmartAnswerPiece(
         answer_piece="the answer is abc[[1]](https://example.com/doc1). "
     )
-    assert output[6] == DanswerAnswerPiece(answer_piece="This is some other stuff.")
+    assert output[6] == BsmartAnswerPiece(answer_piece="This is some other stuff.")
 
     expected_answer = (
         "Based on the search results, "
@@ -170,7 +170,7 @@ def test_answer_with_search_call(
     full_answer = "".join(
         piece.answer_piece
         for piece in output
-        if isinstance(piece, DanswerAnswerPiece) and piece.answer_piece is not None
+        if isinstance(piece, BsmartAnswerPiece) and piece.answer_piece is not None
     )
     assert full_answer == expected_answer
 
@@ -245,13 +245,13 @@ def test_answer_with_search_no_tool_calling(
         tool_args=DEFAULT_SEARCH_ARGS,
         tool_result=[json.loads(doc.model_dump_json()) for doc in mock_search_results],
     )
-    assert output[3] == DanswerAnswerPiece(answer_piece="Based on the search results, ")
+    assert output[3] == BsmartAnswerPiece(answer_piece="Based on the search results, ")
     expected_citation = CitationInfo(citation_num=1, document_id="doc1")
     assert output[4] == expected_citation
-    assert output[5] == DanswerAnswerPiece(
+    assert output[5] == BsmartAnswerPiece(
         answer_piece="the answer is abc[[1]](https://example.com/doc1). "
     )
-    assert output[6] == DanswerAnswerPiece(answer_piece="This is some other stuff.")
+    assert output[6] == BsmartAnswerPiece(answer_piece="This is some other stuff.")
 
     expected_answer = (
         "Based on the search results, "
@@ -351,10 +351,10 @@ def test_answer_with_search_call_quotes_enabled(
         tool_args=DEFAULT_SEARCH_ARGS,
         tool_result=[json.loads(doc.model_dump_json()) for doc in mock_search_results],
     )
-    assert output[3] == DanswerAnswerPiece(answer_piece=answer_content)
-    assert output[4] == DanswerQuotes(
+    assert output[3] == BsmartAnswerPiece(answer_piece=answer_content)
+    assert output[4] == BsmartQuotes(
         quotes=[
-            DanswerQuote(
+            BsmartQuote(
                 quote=quote_content,
                 document_id=mock_search_results[0].document_id,
                 link=mock_search_results[0].link,
@@ -391,8 +391,8 @@ def test_is_cancelled(answer_instance: Answer) -> None:
             connection_status["connected"] = False
 
     assert len(output) == 3
-    assert output[0] == DanswerAnswerPiece(answer_piece="This is the ")
-    assert output[1] == DanswerAnswerPiece(answer_piece="first part.")
+    assert output[0] == BsmartAnswerPiece(answer_piece="This is the ")
+    assert output[1] == BsmartAnswerPiece(answer_piece="first part.")
     assert output[2] == StreamStopInfo(stop_reason=StreamStopReason.CANCELLED)
 
     # Verify that the stream was cancelled

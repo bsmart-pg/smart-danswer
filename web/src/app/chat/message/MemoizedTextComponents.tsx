@@ -1,6 +1,6 @@
 import { Citation } from "@/components/search/results/Citation";
 import { WebResultIcon } from "@/components/WebResultIcon";
-import { LoadedDanswerDocument } from "@/lib/search/interfaces";
+import { LoadedBsmartDocument } from "@/lib/search/interfaces";
 import { getSourceMetadata } from "@/lib/sources";
 import { ValidSources } from "@/lib/types";
 import React, { memo } from "react";
@@ -65,7 +65,7 @@ export const MemoizedLink = memo((props: any) => {
         url={document?.url}
         icon={document?.icon as React.ReactNode}
         link={rest?.href}
-        document={document as LoadedDanswerDocument}
+        document={document as LoadedBsmartDocument}
         updatePresentingDocument={updatePresentingDocument}
       >
         {rest.children}

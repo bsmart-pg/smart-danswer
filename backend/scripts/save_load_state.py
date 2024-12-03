@@ -9,13 +9,13 @@ import requests
 
 from alembic import command
 from alembic.config import Config
-from danswer.configs.app_configs import POSTGRES_DB
-from danswer.configs.app_configs import POSTGRES_HOST
-from danswer.configs.app_configs import POSTGRES_PASSWORD
-from danswer.configs.app_configs import POSTGRES_PORT
-from danswer.configs.app_configs import POSTGRES_USER
-from danswer.document_index.vespa.index import DOCUMENT_ID_ENDPOINT
-from danswer.utils.logger import setup_logger
+from bsmart.configs.app_configs import POSTGRES_DB
+from bsmart.configs.app_configs import POSTGRES_HOST
+from bsmart.configs.app_configs import POSTGRES_PASSWORD
+from bsmart.configs.app_configs import POSTGRES_PORT
+from bsmart.configs.app_configs import POSTGRES_USER
+from bsmart.document_index.vespa.index import DOCUMENT_ID_ENDPOINT
+from bsmart.utils.logger import setup_logger
 
 logger = setup_logger()
 
@@ -95,24 +95,24 @@ def load_vespa(filename: str) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Danswer checkpoint saving and loading."
+        description="Bsmart checkpoint saving and loading."
     )
     parser.add_argument(
-        "--save", action="store_true", help="Save Danswer state to directory."
+        "--save", action="store_true", help="Save Bsmart state to directory."
     )
     parser.add_argument(
-        "--load", action="store_true", help="Load Danswer state from save directory."
+        "--load", action="store_true", help="Load Bsmart state from save directory."
     )
     parser.add_argument(
         "--postgres_container_name",
         type=str,
-        default="danswer-stack-relational_db-1",
+        default="bsmart-stack-relational_db-1",
         help="Name of the postgres container to dump",
     )
     parser.add_argument(
         "--checkpoint_dir",
         type=str,
-        default=os.path.join("..", "danswer_checkpoint"),
+        default=os.path.join("..", "bsmart_checkpoint"),
         help="A directory to store temporary files to.",
     )
 

@@ -1,12 +1,12 @@
-import { DanswerDocument } from "./search/interfaces";
+import { BsmartDocument } from "./search/interfaces";
 
 export function removeDuplicateDocs(
-  documents: DanswerDocument[],
+  documents: BsmartDocument[],
   agentic?: boolean,
   relevance?: any
 ) {
   const seen = new Set<string>();
-  const output: DanswerDocument[] = [];
+  const output: BsmartDocument[] = [];
   documents.forEach((document) => {
     if (
       document.document_id &&

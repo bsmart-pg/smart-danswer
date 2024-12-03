@@ -8,7 +8,7 @@ import pytest
 import pywikibot  # type: ignore[import-untyped]
 from pytest_mock import MockFixture
 
-from danswer.connectors.mediawiki import wiki
+from bsmart.connectors.mediawiki import wiki
 
 # Some of these tests are disabled for now due to flakiness with wikipedia as the backend
 

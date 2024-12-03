@@ -60,7 +60,7 @@ import { LlmOverride, useFilters, useLlmOverride } from "@/lib/hooks";
 import { computeAvailableFilters } from "@/lib/filters";
 import { ChatState, FeedbackType, RegenerationState } from "./types";
 import { ChatFilters } from "./documentSidebar/ChatFilters";
-import { DanswerInitializingLoader } from "@/components/DanswerInitializingLoader";
+import { BsmartInitializingLoader } from "@/components/BsmartInitializingLoader";
 import { FeedbackModal } from "./modal/FeedbackModal";
 import { ShareChatSessionModal } from "./modal/ShareChatSessionModal";
 import { FiArrowDown } from "react-icons/fi";
@@ -69,7 +69,7 @@ import { AIMessage, HumanMessage } from "./message/Messages";
 import { StarterMessages } from "../../components/assistants/StarterMessage";
 import {
   AnswerPiecePacket,
-  DanswerDocument,
+  BsmartDocument,
   FinalContextDocs,
   StreamStopInfo,
   StreamStopReason,
@@ -281,7 +281,7 @@ export function ChatPage({
     useState<Persona | null>(null);
 
   const [presentingDocument, setPresentingDocument] =
-    useState<DanswerDocument | null>(null);
+    useState<BsmartDocument | null>(null);
 
   const {
     visibleAssistants: assistants,
@@ -361,7 +361,7 @@ export function ChatPage({
 
   // this is used to track which assistant is being used to generate the current message
   // for example, this would come into play when:
-  // 1. default assistant is `Danswer`
+  // 1. default assistant is `Bsmart`
   // 2. we "@"ed the `GPT` assistant and sent a message
   // 3. while the `GPT` assistant message is generating, we "@" the `Paraphrase` assistant
   const [alternativeGeneratingAssistant, setAlternativeGeneratingAssistant] =
@@ -1171,7 +1171,7 @@ export function ChatPage({
       selectedDocuments.length > 0
         ? RetrievalType.SelectedDocs
         : RetrievalType.None;
-    let documents: DanswerDocument[] = selectedDocuments;
+    let documents: BsmartDocument[] = selectedDocuments;
     let aiMessageImages: FileDescriptor[] | null = null;
     let error: string | null = null;
     let stackTrace: string | null = null;
@@ -2818,7 +2818,7 @@ export function ChatPage({
                         }`}
                   />
                   <div className="my-auto">
-                    <DanswerInitializingLoader />
+                    <BsmartInitializingLoader />
                   </div>
                 </div>
               )}

@@ -3,7 +3,7 @@ dependencies:
   repository: https://charts.bitnami.com/bitnami
   version: 14.3.1
 - name: vespa
-  repository: https://danswer-ai.github.io/vespa-helm-charts
+  repository: https://bsmart-ai.github.io/vespa-helm-charts
   version: 0.2.16
 - name: nginx
   repository: oci://registry-1.docker.io/bitnamicharts

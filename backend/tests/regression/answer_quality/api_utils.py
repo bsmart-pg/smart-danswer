@@ -1,16 +1,16 @@
 import requests
 from retry import retry
 
-from danswer.configs.constants import DocumentSource
-from danswer.configs.constants import MessageType
-from danswer.connectors.models import InputType
-from danswer.context.search.models import IndexFilters
-from danswer.context.search.models import OptionalSearchSetting
-from danswer.context.search.models import RetrievalDetails
-from danswer.db.enums import IndexingStatus
-from danswer.one_shot_answer.models import DirectQARequest
-from danswer.one_shot_answer.models import ThreadMessage
-from danswer.server.documents.models import ConnectorBase
+from bsmart.configs.constants import DocumentSource
+from bsmart.configs.constants import MessageType
+from bsmart.connectors.models import InputType
+from bsmart.context.search.models import IndexFilters
+from bsmart.context.search.models import OptionalSearchSetting
+from bsmart.context.search.models import RetrievalDetails
+from bsmart.db.enums import IndexingStatus
+from bsmart.one_shot_answer.models import DirectQARequest
+from bsmart.one_shot_answer.models import ThreadMessage
+from bsmart.server.documents.models import ConnectorBase
 from tests.regression.answer_quality.cli_utils import get_api_server_host_port
 
 GENERAL_HEADERS = {"Content-Type": "application/json"}

@@ -3,7 +3,7 @@ from unittest.mock import Mock
 import pytest
 from requests import HTTPError
 
-from danswer.connectors.confluence.onyx_confluence import (
+from bsmart.connectors.confluence.onyx_confluence import (
     handle_confluence_rate_limit,
 )
 

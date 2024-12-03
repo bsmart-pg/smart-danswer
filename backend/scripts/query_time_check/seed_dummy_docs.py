@@ -11,16 +11,16 @@ Then run test_query_times.py to test query times.
 import random
 from datetime import datetime
 
-from danswer.access.models import DocumentAccess
-from danswer.configs.constants import DocumentSource
-from danswer.connectors.models import Document
-from danswer.db.engine import get_session_context_manager
-from danswer.db.search_settings import get_current_search_settings
-from danswer.document_index.vespa.index import VespaIndex
-from danswer.indexing.models import ChunkEmbedding
-from danswer.indexing.models import DocMetadataAwareIndexChunk
-from danswer.indexing.models import IndexChunk
-from danswer.utils.timing import log_function_time
+from bsmart.access.models import DocumentAccess
+from bsmart.configs.constants import DocumentSource
+from bsmart.connectors.models import Document
+from bsmart.db.engine import get_session_context_manager
+from bsmart.db.search_settings import get_current_search_settings
+from bsmart.document_index.vespa.index import VespaIndex
+from bsmart.indexing.models import ChunkEmbedding
+from bsmart.indexing.models import DocMetadataAwareIndexChunk
+from bsmart.indexing.models import IndexChunk
+from bsmart.utils.timing import log_function_time
 from shared_configs.configs import POSTGRES_DEFAULT_SCHEMA
 from shared_configs.model_server_models import Embedding
 

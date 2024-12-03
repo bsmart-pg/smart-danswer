@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.schema import SchemaItem
 
 from alembic import context
-from danswer.db.engine import build_connection_string
-from danswer.db.models import PublicBase
+from bsmart.db.engine import build_connection_string
+from bsmart.db.models import PublicBase
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

@@ -1,12 +1,12 @@
 import { SourceIcon } from "@/components/SourceIcon";
-import { DanswerDocument } from "@/lib/search/interfaces";
+import { BsmartDocument } from "@/lib/search/interfaces";
 import { DocumentSelector } from "./DocumentSelector";
 
 export function SelectedDocumentDisplay({
   document,
   handleDeselect,
 }: {
-  document: DanswerDocument;
+  document: BsmartDocument;
   handleDeselect: (documentId: string) => void;
 }) {
   return (

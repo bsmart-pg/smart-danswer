@@ -1,5 +1,5 @@
 import { SourceIcon } from "@/components/SourceIcon";
-import { DanswerDocument } from "@/lib/search/interfaces";
+import { BsmartDocument } from "@/lib/search/interfaces";
 import { FiTag } from "react-icons/fi";
 import { DocumentSelector } from "./DocumentSelector";
 import { buildDocumentSummaryDisplay } from "@/components/search/DocumentDisplay";
@@ -10,12 +10,12 @@ import { Dispatch, SetStateAction } from "react";
 
 interface DocumentDisplayProps {
   closeSidebar: () => void;
-  document: DanswerDocument;
+  document: BsmartDocument;
   modal?: boolean;
   isSelected: boolean;
   handleSelect: (documentId: string) => void;
   tokenLimitReached: boolean;
-  setPresentingDocument: Dispatch<SetStateAction<DanswerDocument | null>>;
+  setPresentingDocument: Dispatch<SetStateAction<BsmartDocument | null>>;
 }
 
 export function DocumentMetadataBlock({
@@ -23,7 +23,7 @@ export function DocumentMetadataBlock({
   document,
 }: {
   modal?: boolean;
-  document: DanswerDocument;
+  document: BsmartDocument;
 }) {
   const MAX_METADATA_ITEMS = 3;
   const metadataEntries = Object.entries(document.metadata);

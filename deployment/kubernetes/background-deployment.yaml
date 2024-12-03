@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: background
-          image: danswer/danswer-backend:latest
+          image: bsmart/bsmart-backend:latest
           imagePullPolicy: IfNotPresent
           command:
             - "/bin/sh"
@@ -28,7 +28,7 @@ spec:
             - name: REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: danswer-secrets
+                  name: bsmart-secrets
                   key: redis_password
           envFrom:
             - configMapRef:

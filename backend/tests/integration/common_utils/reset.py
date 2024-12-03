@@ -7,23 +7,23 @@ import requests
 
 from alembic import command
 from alembic.config import Config
-from danswer.configs.app_configs import POSTGRES_HOST
-from danswer.configs.app_configs import POSTGRES_PASSWORD
-from danswer.configs.app_configs import POSTGRES_PORT
-from danswer.configs.app_configs import POSTGRES_USER
-from danswer.db.engine import build_connection_string
-from danswer.db.engine import get_all_tenant_ids
-from danswer.db.engine import get_session_context_manager
-from danswer.db.engine import get_session_with_tenant
-from danswer.db.engine import SYNC_DB_API
-from danswer.db.search_settings import get_current_search_settings
-from danswer.db.swap_index import check_index_swap
-from danswer.document_index.vespa.index import DOCUMENT_ID_ENDPOINT
-from danswer.document_index.vespa.index import VespaIndex
-from danswer.indexing.models import IndexingSetting
-from danswer.setup import setup_postgres
-from danswer.setup import setup_vespa
-from danswer.utils.logger import setup_logger
+from bsmart.configs.app_configs import POSTGRES_HOST
+from bsmart.configs.app_configs import POSTGRES_PASSWORD
+from bsmart.configs.app_configs import POSTGRES_PORT
+from bsmart.configs.app_configs import POSTGRES_USER
+from bsmart.db.engine import build_connection_string
+from bsmart.db.engine import get_all_tenant_ids
+from bsmart.db.engine import get_session_context_manager
+from bsmart.db.engine import get_session_with_tenant
+from bsmart.db.engine import SYNC_DB_API
+from bsmart.db.search_settings import get_current_search_settings
+from bsmart.db.swap_index import check_index_swap
+from bsmart.document_index.vespa.index import DOCUMENT_ID_ENDPOINT
+from bsmart.document_index.vespa.index import VespaIndex
+from bsmart.indexing.models import IndexingSetting
+from bsmart.setup import setup_postgres
+from bsmart.setup import setup_vespa
+from bsmart.utils.logger import setup_logger
 
 logger = setup_logger()
 
@@ -64,7 +64,7 @@ def _run_migrations(
 
 
 def reset_postgres(
-    database: str = "postgres", config_name: str = "alembic", setup_danswer: bool = True
+    database: str = "postgres", config_name: str = "alembic", setup_bsmart: bool = True
 ) -> None:
     """Reset the Postgres database."""
 
@@ -134,7 +134,7 @@ def reset_postgres(
         direction="upgrade",
         revision="head",
     )
-    if not setup_danswer:
+    if not setup_bsmart:
         return
 
     # do the same thing as we do on API server startup
@@ -165,7 +165,7 @@ def reset_vespa() -> None:
             continuation = None
             should_continue = True
             while should_continue:
-                params = {"selection": "true", "cluster": "danswer_index"}
+                params = {"selection": "true", "cluster": "bsmart_index"}
                 if continuation:
                     params = {**params, "continuation": continuation}
                 response = requests.delete(
@@ -215,7 +215,7 @@ def reset_postgres_multitenant() -> None:
     cur.close()
     conn.close()
 
-    reset_postgres(config_name="schema_private", setup_danswer=False)
+    reset_postgres(config_name="schema_private", setup_bsmart=False)
 
 
 def reset_vespa_multitenant() -> None:
@@ -245,7 +245,7 @@ def reset_vespa_multitenant() -> None:
                 continuation = None
                 should_continue = True
                 while should_continue:
-                    params = {"selection": "true", "cluster": "danswer_index"}
+                    params = {"selection": "true", "cluster": "bsmart_index"}
                     if continuation:
                         params = {**params, "continuation": continuation}
                     response = requests.delete(

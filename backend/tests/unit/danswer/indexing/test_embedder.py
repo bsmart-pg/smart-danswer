@@ -4,20 +4,20 @@ from unittest.mock import patch
 
 import pytest
 
-from danswer.configs.constants import DocumentSource
-from danswer.connectors.models import Document
-from danswer.connectors.models import Section
-from danswer.indexing.embedder import DefaultIndexingEmbedder
-from danswer.indexing.models import ChunkEmbedding
-from danswer.indexing.models import DocAwareChunk
-from danswer.indexing.models import IndexChunk
+from bsmart.configs.constants import DocumentSource
+from bsmart.connectors.models import Document
+from bsmart.connectors.models import Section
+from bsmart.indexing.embedder import DefaultIndexingEmbedder
+from bsmart.indexing.models import ChunkEmbedding
+from bsmart.indexing.models import DocAwareChunk
+from bsmart.indexing.models import IndexChunk
 from shared_configs.enums import EmbeddingProvider
 from shared_configs.enums import EmbedTextType
 
 
 @pytest.fixture
 def mock_embedding_model() -> Generator[Mock, None, None]:
-    with patch("danswer.indexing.embedder.EmbeddingModel") as mock:
+    with patch("bsmart.indexing.embedder.EmbeddingModel") as mock:
         yield mock
 
 

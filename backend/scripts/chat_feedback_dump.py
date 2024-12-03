@@ -8,9 +8,9 @@ from uuid import UUID
 
 import requests
 
-from danswer.server.manage.models import AllUsersResponse
-from danswer.server.query_and_chat.models import ChatSessionsResponse
-from ee.danswer.server.query_history.api import ChatSessionSnapshot
+from bsmart.server.manage.models import AllUsersResponse
+from bsmart.server.query_and_chat.models import ChatSessionsResponse
+from ee.bsmart.server.query_history.api import ChatSessionSnapshot
 
 # Configure the logger
 logging.basicConfig(
@@ -132,9 +132,9 @@ logger = getLogger(__name__)
 #     flow_type: SessionType
 
 
-def create_new_chat_session(danswer_url: str, api_key: str | None) -> int:
+def create_new_chat_session(bsmart_url: str, api_key: str | None) -> int:
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else None
-    session_endpoint = danswer_url + "/api/chat/create-chat-session"
+    session_endpoint = bsmart_url + "/api/chat/create-chat-session"
 
     response = requests.get(session_endpoint, headers=headers)
     response.raise_for_status()
@@ -143,8 +143,8 @@ def create_new_chat_session(danswer_url: str, api_key: str | None) -> int:
     return new_session_id
 
 
-def manage_users(danswer_url: str, headers: dict[str, str] | None) -> AllUsersResponse:
-    endpoint = danswer_url + "/manage/users"
+def manage_users(bsmart_url: str, headers: dict[str, str] | None) -> AllUsersResponse:
+    endpoint = bsmart_url + "/manage/users"
 
     response = requests.get(
         endpoint,
@@ -157,9 +157,9 @@ def manage_users(danswer_url: str, headers: dict[str, str] | None) -> AllUsersRe
 
 
 def get_chat_sessions(
-    danswer_url: str, headers: dict[str, str] | None, user_id: UUID
+    bsmart_url: str, headers: dict[str, str] | None, user_id: UUID
 ) -> ChatSessionsResponse:
-    endpoint = danswer_url + "/admin/chat-sessions"
+    endpoint = bsmart_url + "/admin/chat-sessions"
 
     params: dict[str, Any] = {"user_id": user_id}
     response = requests.get(
@@ -174,9 +174,9 @@ def get_chat_sessions(
 
 
 def get_session_history(
-    danswer_url: str, headers: dict[str, str] | None, session_id: UUID
+    bsmart_url: str, headers: dict[str, str] | None, session_id: UUID
 ) -> ChatSessionSnapshot:
-    endpoint = danswer_url + f"/admin/chat-session-history/{session_id}"
+    endpoint = bsmart_url + f"/admin/chat-session-history/{session_id}"
 
     response = requests.get(
         endpoint,
@@ -188,10 +188,10 @@ def get_session_history(
     return sessions
 
 
-def process_all_chat_feedback(danswer_url: str, api_key: str | None) -> None:
+def process_all_chat_feedback(bsmart_url: str, api_key: str | None) -> None:
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else None
 
-    all_users = manage_users(danswer_url, headers)
+    all_users = manage_users(bsmart_url, headers)
     if not all_users:
         raise RuntimeError("manage_users returned None")
 
@@ -200,11 +200,11 @@ def process_all_chat_feedback(danswer_url: str, api_key: str | None) -> None:
     user_ids: list[UUID] = [user.id for user in all_users.accepted]
 
     for user_id in user_ids:
-        r_sessions = get_chat_sessions(danswer_url, headers, user_id)
+        r_sessions = get_chat_sessions(bsmart_url, headers, user_id)
         logger.info(f"user={user_id} num_sessions={len(r_sessions.sessions)}")
         for session in r_sessions.sessions:
             try:
-                s = get_session_history(danswer_url, headers, session.id)
+                s = get_session_history(bsmart_url, headers, session.id)
             except requests.exceptions.HTTPError:
                 logger.exception("get_session_history failed.")
 
@@ -224,16 +224,16 @@ if __name__ == "__main__":
         "--url",
         type=str,
         default="http://localhost:8080",
-        help="Danswer URL, should point to Danswer nginx.",
+        help="Bsmart URL, should point to Bsmart nginx.",
     )
 
     # Not needed if Auth is disabled?
-    # Or for Danswer MIT Edition API key must be replaced with session cookie
+    # Or for Bsmart MIT Edition API key must be replaced with session cookie
     parser.add_argument(
         "--api-key",
         type=str,
-        help="Danswer Admin Level API key",
+        help="Bsmart Admin Level API key",
     )
 
     args = parser.parse_args()
-    process_all_chat_feedback(danswer_url=args.url, api_key=args.api_key)
+    process_all_chat_feedback(bsmart_url=args.url, api_key=args.api_key)

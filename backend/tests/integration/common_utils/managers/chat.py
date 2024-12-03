@@ -4,14 +4,14 @@ from uuid import UUID
 import requests
 from requests.models import Response
 
-from danswer.context.search.models import RetrievalDetails
-from danswer.file_store.models import FileDescriptor
-from danswer.llm.override_models import LLMOverride
-from danswer.llm.override_models import PromptOverride
-from danswer.one_shot_answer.models import DirectQARequest
-from danswer.one_shot_answer.models import ThreadMessage
-from danswer.server.query_and_chat.models import ChatSessionCreationRequest
-from danswer.server.query_and_chat.models import CreateChatMessageRequest
+from bsmart.context.search.models import RetrievalDetails
+from bsmart.file_store.models import FileDescriptor
+from bsmart.llm.override_models import LLMOverride
+from bsmart.llm.override_models import PromptOverride
+from bsmart.one_shot_answer.models import DirectQARequest
+from bsmart.one_shot_answer.models import ThreadMessage
+from bsmart.server.query_and_chat.models import ChatSessionCreationRequest
+from bsmart.server.query_and_chat.models import CreateChatMessageRequest
 from tests.integration.common_utils.constants import API_SERVER_URL
 from tests.integration.common_utils.constants import GENERAL_HEADERS
 from tests.integration.common_utils.test_models import DATestChatMessage

@@ -1,8 +1,8 @@
-import { DanswerDocument, SearchRequestArgs } from "./interfaces";
+import { BsmartDocument, SearchRequestArgs } from "./interfaces";
 
 interface KeywordResponse {
-  top_ranked_docs: DanswerDocument[];
-  lower_ranked_docs: DanswerDocument[];
+  top_ranked_docs: BsmartDocument[];
+  lower_ranked_docs: BsmartDocument[];
 }
 
 export const keywordSearch = async ({
@@ -14,7 +14,7 @@ export const keywordSearch = async ({
     method: "POST",
     body: JSON.stringify({
       query,
-      collection: "danswer_index",
+      collection: "bsmart_index",
       ...(sources.length > 0
         ? {
             filters: [

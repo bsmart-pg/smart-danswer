@@ -3,7 +3,7 @@
 import { HeaderTitle } from "@/components/header/HeaderTitle";
 import { Logo } from "@/components/Logo";
 import { SettingsContext } from "@/components/settings/SettingsProvider";
-import { NEXT_PUBLIC_DO_NOT_USE_TOGGLE_OFF_DANSWER_POWERED } from "@/lib/constants";
+import { NEXT_PUBLIC_DO_NOT_USE_TOGGLE_OFF_BSMART_POWERED } from "@/lib/constants";
 import Link from "next/link";
 import { useContext } from "react";
 import { FiSidebar } from "react-icons/fi";
@@ -34,13 +34,13 @@ export default function FixedLogo({
                 <HeaderTitle backgroundToggled={backgroundToggled}>
                   {enterpriseSettings.application_name}
                 </HeaderTitle>
-                {!NEXT_PUBLIC_DO_NOT_USE_TOGGLE_OFF_DANSWER_POWERED && (
-                  <p className="text-xs text-subtle">Powered by Danswer</p>
+                {!NEXT_PUBLIC_DO_NOT_USE_TOGGLE_OFF_BSMART_POWERED && (
+                  <p className="text-xs text-subtle">Powered by Bsmart</p>
                 )}
               </div>
             ) : (
               <HeaderTitle backgroundToggled={backgroundToggled}>
-                Danswer
+                Bsmart
               </HeaderTitle>
             )}
           </div>

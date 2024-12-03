@@ -57,9 +57,9 @@ export default function OpenEmbeddingPage({
         </a>
         .
         <br />
-        <b>NOTE:</b> not all models listed will work with Danswer, since some
+        <b>NOTE:</b> not all models listed will work with Bsmart, since some
         have unique interfaces or special requirements. If in doubt, reach out
-        to the Danswer team.
+        to the Bsmart team.
       </Text>
       {!configureModel && (
         <Button

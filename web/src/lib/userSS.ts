@@ -29,7 +29,7 @@ export const getAuthTypeMetadataSS = async (): Promise<AuthTypeMetadata> => {
   }
 
   // for SAML / OIDC, we auto-redirect the user to the IdP when the user visits
-  // Danswer in an un-authenticated state
+  // Bsmart in an un-authenticated state
   if (authType === "oidc" || authType === "saml") {
     return {
       authType,

@@ -4,11 +4,11 @@ from uuid import UUID
 from pydantic import BaseModel
 from pydantic import Field
 
-from danswer.auth.schemas import UserRole
-from danswer.context.search.enums import RecencyBiasSetting
-from danswer.db.enums import AccessType
-from danswer.server.documents.models import DocumentSource
-from danswer.server.documents.models import InputType
+from bsmart.auth.schemas import UserRole
+from bsmart.context.search.enums import RecencyBiasSetting
+from bsmart.db.enums import AccessType
+from bsmart.server.documents.models import DocumentSource
+from bsmart.server.documents.models import InputType
 
 """
 These data models are used to represent the data on the testing side of things.

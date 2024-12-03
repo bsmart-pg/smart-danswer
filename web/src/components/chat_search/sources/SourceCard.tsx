@@ -1,9 +1,9 @@
 import { WebResultIcon } from "@/components/WebResultIcon";
 import { SourceIcon } from "@/components/SourceIcon";
-import { DanswerDocument } from "@/lib/search/interfaces";
+import { BsmartDocument } from "@/lib/search/interfaces";
 import { truncateString } from "@/lib/utils";
 
-export default function SourceCard({ doc }: { doc: DanswerDocument }) {
+export default function SourceCard({ doc }: { doc: BsmartDocument }) {
   return (
     <a
       key={doc.document_id}
@@ -31,7 +31,7 @@ export default function SourceCard({ doc }: { doc: DanswerDocument }) {
 interface SeeMoreBlockProps {
   documentSelectionToggled: boolean;
   toggleDocumentSelection?: () => void;
-  uniqueSources: DanswerDocument["source_type"][];
+  uniqueSources: BsmartDocument["source_type"][];
 }
 
 export function SeeMoreBlock({

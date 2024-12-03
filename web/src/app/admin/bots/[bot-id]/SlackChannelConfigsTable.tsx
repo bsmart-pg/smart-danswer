@@ -139,7 +139,7 @@ export function SlackChannelConfigsTable({
                   className="text-center text-muted-foreground"
                 >
                   Please add a New Slack Bot Configuration to begin chatting
-                  with Danswer!
+                  with Bsmart!
                 </TableCell>
               </TableRow>
             )}

@@ -1,9 +1,9 @@
 apiVersion: v2
-name: danswer-stack
+name: bsmart-stack
 description: A Helm chart for Kubernetes
-home: https://www.danswer.ai/
+home: https://www.bsmart.ai/
 sources:
-  - "https://github.com/danswer-ai/danswer"
+  - "https://github.com/bsmart-ai/bsmart"
 type: application
 version: 0.2.1
 appVersion: "latest"
@@ -12,9 +12,9 @@ annotations:
   licenses: MIT
   images: |
     - name: webserver
-      image: docker.io/danswer/danswer-web-server:latest
+      image: docker.io/bsmart/bsmart-web-server:latest
     - name: background
-      image: docker.io/danswer/danswer-backend:latest
+      image: docker.io/bsmart/bsmart-backend:latest
     - name: vespa
       image: vespaengine/vespa:8.277.17
 dependencies:
@@ -24,7 +24,7 @@ dependencies:
     condition: postgresql.enabled
   - name: vespa
     version: 0.2.16
-    repository: https://danswer-ai.github.io/vespa-helm-charts
+    repository: https://bsmart-ai.github.io/vespa-helm-charts
     condition: vespa.enabled
   - name: nginx
     version: 15.14.0

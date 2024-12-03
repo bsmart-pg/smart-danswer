@@ -2,11 +2,11 @@ import datetime
 import json
 import os
 
-from danswer.configs.constants import DocumentSource
-from danswer.connectors.cross_connector_utils.miscellaneous_utils import time_str_to_utc
-from danswer.connectors.gmail.connector import _build_time_range_query
-from danswer.connectors.gmail.connector import thread_to_document
-from danswer.connectors.models import Document
+from bsmart.configs.constants import DocumentSource
+from bsmart.connectors.cross_connector_utils.miscellaneous_utils import time_str_to_utc
+from bsmart.connectors.gmail.connector import _build_time_range_query
+from bsmart.connectors.gmail.connector import thread_to_document
+from bsmart.connectors.models import Document
 
 
 def test_thread_to_document() -> None:

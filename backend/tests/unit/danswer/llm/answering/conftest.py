@@ -5,16 +5,16 @@ from unittest.mock import MagicMock
 import pytest
 from langchain_core.messages import SystemMessage
 
-from danswer.chat.models import LlmDoc
-from danswer.configs.constants import DocumentSource
-from danswer.llm.answering.models import AnswerStyleConfig
-from danswer.llm.answering.models import CitationConfig
-from danswer.llm.answering.models import PromptConfig
-from danswer.llm.answering.prompts.build import AnswerPromptBuilder
-from danswer.llm.interfaces import LLMConfig
-from danswer.tools.models import ToolResponse
-from danswer.tools.tool_implementations.search.search_tool import SearchTool
-from danswer.tools.tool_implementations.search_like_tool_utils import (
+from bsmart.chat.models import LlmDoc
+from bsmart.configs.constants import DocumentSource
+from bsmart.llm.answering.models import AnswerStyleConfig
+from bsmart.llm.answering.models import CitationConfig
+from bsmart.llm.answering.models import PromptConfig
+from bsmart.llm.answering.prompts.build import AnswerPromptBuilder
+from bsmart.llm.interfaces import LLMConfig
+from bsmart.tools.models import ToolResponse
+from bsmart.tools.tool_implementations.search.search_tool import SearchTool
+from bsmart.tools.tool_implementations.search_like_tool_utils import (
     FINAL_CONTEXT_DOCUMENTS_ID,
 )
 

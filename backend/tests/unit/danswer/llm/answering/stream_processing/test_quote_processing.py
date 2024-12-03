@@ -1,11 +1,11 @@
 import json
 from datetime import datetime
 
-from danswer.chat.models import DanswerAnswerPiece
-from danswer.chat.models import DanswerQuotes
-from danswer.chat.models import LlmDoc
-from danswer.configs.constants import DocumentSource
-from danswer.llm.answering.stream_processing.quotes_processing import (
+from bsmart.chat.models import BsmartAnswerPiece
+from bsmart.chat.models import BsmartQuotes
+from bsmart.chat.models import LlmDoc
+from bsmart.configs.constants import DocumentSource
+from bsmart.llm.answering.stream_processing.quotes_processing import (
     QuotesProcessor,
 )
 
@@ -44,10 +44,10 @@ def _process_tokens(
     # need to add a None to the end to simulate the end of the stream
     for token in tokens + [None]:
         for output in processor.process_token(token):
-            if isinstance(output, DanswerAnswerPiece):
+            if isinstance(output, BsmartAnswerPiece):
                 if output.answer_piece:
                     answer += output.answer_piece
-            elif isinstance(output, DanswerQuotes):
+            elif isinstance(output, BsmartQuotes):
                 quotes.extend(q.quote for q in output.quotes)
 
     return answer, quotes
@@ -58,7 +58,7 @@ def test_process_model_tokens_answer() -> None:
         "{",
         "\n  ",
         '"answer": "Yes',
-        ", Danswer allows",
+        ", Bsmart allows",
         " customized prompts. This",
         " feature",
         " is currently being",
@@ -90,7 +90,7 @@ def test_process_model_tokens_answer() -> None:
         " the LLM.",
         " This enhancement",
         " aims to make",
-        " Danswer more",
+        " Bsmart more",
         " adaptable to",
         " different",
         " business",
@@ -106,7 +106,7 @@ def test_process_model_tokens_answer() -> None:
         " company.",
         " Additionally",
         ",",
-        " Danswer already",
+        " Bsmart already",
         " supports creating",
         " custom AI",
         " Assistants with",
@@ -329,7 +329,7 @@ def test_json_with_lengthy_prefix_and_quotes() -> None:
     tokens = [
         "*** Based on the provided documents, there does not appear to be any information ",
         "directly relevant to answering which documents are my favorite. ",
-        "The documents seem to be focused on describing the Danswer product ",
+        "The documents seem to be focused on describing the Bsmart product ",
         "and its features/use cases. Since I do not have personal preferences ",
         "for documents, I will provide a general response:\n\n",
         "```",
